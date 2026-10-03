@@ -1,5 +1,6 @@
-import { ComingNext } from "@/components/ui/ComingNext";
+import { ReviewPage } from "@/components/review/ReviewPage";
 
-export default function Page() {
-  return <ComingNext title="Review" phase="Built in phase 4." />;
+export default async function Page(props: PageProps<"/payments/[id]">) {
+  const { id } = await props.params;
+  return <ReviewPage id={id} />;
 }

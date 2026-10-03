@@ -385,7 +385,7 @@ export function seed(today: string): Seed {
       slipOnly: true,
       lines: [
         line("Card payment", 1, 6400, "420", "NONE", {
-          glMeta: unsure("A card slip shows only the total, so the category is a guess from the merchant name."),
+          glMeta: unsure("A card slip shows only the total, so the category is a guess from the merchant name.", "memory"),
           taxMeta: { origin: "missing", reason: "No VAT shown. A card slip never shows it." },
         }),
       ],

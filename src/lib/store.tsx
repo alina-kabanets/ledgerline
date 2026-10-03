@@ -9,7 +9,7 @@ import { findDuplicate, issuesFor, type RuleContext } from "./rules";
 import { UNREADABLE_REASON } from "./samples";
 import { seed } from "./seed";
 import { track } from "./track";
-import type { Account, Contact, Doc, Invoice, Issue } from "./types";
+import type { Account, BankDetails, Contact, Doc, Invoice, Issue } from "./types";
 
 // App state: one reducer, saved to localStorage so a refresh keeps the demo where it was.
 
@@ -39,6 +39,7 @@ type Action =
   | { type: "add"; docs: Doc[] }
   | { type: "remove"; id: string }
   | { type: "contact"; id: string; fn: (c: Contact) => Contact }
+  | { type: "addContact"; contact: Contact }
   | { type: "debit"; accountId: string; amount: number }
   | { type: "erp"; id: string }
   | { type: "batch"; ids: string[] }
@@ -60,6 +61,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, docs: state.docs.filter((d) => d.id !== action.id), batch: state.batch.filter((id) => id !== action.id) };
     case "contact":
       return { ...state, contacts: state.contacts.map((c) => (c.id === action.id ? action.fn(c) : c)) };
+    case "addContact":
+      return { ...state, contacts: [...state.contacts, action.contact] };
     case "debit":
       return { ...state, accounts: state.accounts.map((a) => (a.id === action.accountId ? { ...a, balance: a.balance - action.amount } : a)) };
     case "erp":
@@ -120,6 +123,8 @@ type Store = {
     retryExtraction: (id: string) => void;
     enterManually: (id: string) => void;
     attachToInvoice: (id: string) => void;
+    createContact: (docId: string) => void;
+    setContactBank: (contactId: string, bank: BankDetails) => void;
     toast: (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
     dismissToast: (id: number) => void;
   };
@@ -299,6 +304,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         track("sync_retried", { id });
         void sync(id);
       },
+      createContact: (docId) => {
+        const target = find(docId);
+        if (!target || target.type !== "invoice" || !target.supplier) return;
+        const contact: Contact = { id: `c-${Date.now().toString(36)}`, name: target.supplier, bank: target.documentBank, paidBefore: 0 };
+        dispatch({ type: "addContact", contact });
+        update(docId, (d) => (d.type === "invoice" ? { ...d, contactId: contact.id } : d));
+      },
+      setContactBank: (contactId, bank) => dispatch({ type: "contact", id: contactId, fn: (c) => ({ ...c, bank }) }),
       setErp: (id) => dispatch({ type: "erp", id }),
       setTab: (tab) => dispatch({ type: "tab", tab }),
       restore: (doc) => dispatch({ type: "add", docs: [doc] }),
