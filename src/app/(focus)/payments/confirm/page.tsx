@@ -1,5 +1,5 @@
-import { ComingNext } from "@/components/ui/ComingNext";
+import { ConfirmPage } from "@/components/payments/ConfirmPage";
 
 export default function Page() {
-  return <ComingNext title="Confirm payments" phase="Built in phase 5." />;
+  return <ConfirmPage />;
 }
