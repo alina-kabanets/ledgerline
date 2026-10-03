@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Ledgerline palette: warm greys, one blue accent, orange for warnings. */
+@theme {
+  --color-ink: #10110d;
+  --color-ink-2: #45473e;
+  --color-muted: #686a60;
+  --color-faint: #bdbeba;
+  --color-line: #e0e1df;
+  --color-hairline: #eeeeec;
+  --color-surface: #f9f9f9;
+  --color-surface-2: #f4f4f3;
+  --color-accent: #3d5afe;
+  --color-accent-soft: #dfe5ff;
+  --color-accent-faint: #f3f5ff;
+  --color-warn: #ff870f;
+  --color-warn-soft: #fef5e9;
+  --color-danger: #c8321e;
+  --color-danger-soft: #fdf1ef;
+  --color-ok: #2f7d4f;
+
+  --font-sans: var(--font-app), "Helvetica Neue", Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    color-scheme: light;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background: #fff;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Amounts line up in columns. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--color-ink);
+  }
+
+  @keyframes pulse-soft {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  .skeleton {
+    background: var(--color-surface-2);
+    border-radius: 4px;
+    animation: pulse-soft 1.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+    }
+  }
 }
