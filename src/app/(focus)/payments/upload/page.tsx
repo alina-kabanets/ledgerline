@@ -1,5 +1,5 @@
-import { ComingNext } from "@/components/ui/ComingNext";
+import { UploadPage } from "@/components/payments/UploadPage";
 
 export default function Page() {
-  return <ComingNext title="Upload" phase="Built in phase 3." />;
+  return <UploadPage />;
 }

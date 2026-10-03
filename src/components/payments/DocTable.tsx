@@ -154,8 +154,8 @@ function InvoiceRow({ doc, selected, canSelect, onToggle }: RowProps<Invoice>) {
       <td className={td}>
         <div className="flex items-center gap-3">
           <FileText size={16} strokeWidth={1.25} className="shrink-0 text-muted" />
-          {busy ? (
-            <div className="text-muted">{doc.fileName}</div>
+          {busy || status.key === "unreadable" ? (
+            <div className="truncate text-muted">{doc.fileName}</div>
           ) : (
             <Link href={`/payments/${doc.id}`} className="min-w-0 hover:underline">
               <div className="truncate">{doc.supplier || "Unknown supplier"}</div>
@@ -203,7 +203,24 @@ function InvoiceRow({ doc, selected, canSelect, onToggle }: RowProps<Invoice>) {
               Review
             </ButtonLink>
           )}
-          {!busy && status.key !== "needs_review" && status.key !== "issues" && (
+          {status.key === "unreadable" && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => actions.retryExtraction(doc.id)}>
+                Retry
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  actions.enterManually(doc.id);
+                  router.push(`/payments/${doc.id}`);
+                }}
+              >
+                Enter manually
+              </Button>
+            </>
+          )}
+          {!busy && !["needs_review", "issues", "unreadable"].includes(status.key) && (
             <ButtonLink href={`/payments/${doc.id}`} size="sm" variant={status.key === "ready" ? "ghost" : "secondary"}>
               View
             </ButtonLink>
@@ -239,8 +256,8 @@ function ReceiptRow({ doc, selected, canSelect, onToggle }: RowProps<Receipt>) {
       <td className={td}>
         <div className="flex items-center gap-3">
           <ReceiptIcon size={16} strokeWidth={1.25} className="shrink-0 text-muted" />
-          {busy ? (
-            <div className="text-muted">{doc.fileName}</div>
+          {busy || status.key === "unreadable" ? (
+            <div className="truncate text-muted">{doc.fileName}</div>
           ) : (
             <Link href={`/payments/${doc.id}`} className="min-w-0 hover:underline">
               <div className="truncate">{doc.merchant || "Unknown merchant"}</div>
@@ -275,7 +292,24 @@ function ReceiptRow({ doc, selected, canSelect, onToggle }: RowProps<Receipt>) {
               Review
             </ButtonLink>
           )}
-          {!busy && status.key !== "needs_review" && status.key !== "issues" && (
+          {status.key === "unreadable" && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => actions.retryExtraction(doc.id)}>
+                Retry
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  actions.enterManually(doc.id);
+                  router.push(`/payments/${doc.id}`);
+                }}
+              >
+                Enter manually
+              </Button>
+            </>
+          )}
+          {!busy && !["needs_review", "issues", "unreadable"].includes(status.key) && (
             <ButtonLink href={`/payments/${doc.id}`} size="sm" variant={status.key === "ready" ? "ghost" : "secondary"}>
               View
             </ButtonLink>

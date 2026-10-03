@@ -1,6 +1,7 @@
 import { addDays } from "./dates";
 import { taxFor, erps } from "./erp";
-import type { Account, BankDetails, Channel, Contact, Doc, FieldMeta, Invoice, LineItem, Receipt } from "./types";
+import { printFrom } from "./printed";
+import type { Account, BankDetails, Channel, Contact, Doc, FieldMeta, Invoice, LineItem, Printed, Receipt } from "./types";
 
 // Demo data. One document for each state and each edge case.
 // Dates are relative to today so "overdue" and "due tomorrow" stay true.
@@ -449,5 +450,48 @@ export function seed(today: string): Seed {
     { id: "business", name: "Operating Account", currency: "GBP", balance: 612040, settlementDays: 0 },
   ];
 
-  return { docs: [...invoices, ...receipts], contacts, accounts };
+  // How each mock document looks on paper where it differs from the extracted fields.
+  const paper: Record<string, Partial<Printed>> = {
+    "inv-fieldwork": {
+      dates: [
+        { key: "issuedOn", label: "Invoice date", value: addDays(today, -4) },
+        { key: "other", label: "Delivery date", value: addDays(today, 3) },
+        { key: "dueOn", label: "Payment due", value: addDays(today, 26) },
+      ],
+    },
+    "rec-pret": { blurred: ["total"] },
+    "rec-tesco": {
+      rows: [
+        { description: "Sandwich platter", qty: 1, amount: 1100 },
+        { description: "Fruit", qty: 1, amount: 623 },
+        { description: "AA batteries", qty: 1, amount: 550 },
+        { description: "Notebooks x4", qty: 1, amount: 902 },
+      ],
+      totals: [
+        { label: "VAT 0% on 17.23", amount: 0 },
+        { label: "VAT 20% on 12.10", amount: 242 },
+        { label: "Total", amount: 3175, key: "total" },
+      ],
+    },
+    "rec-figma-oct": { title: "Invoice", number: "FIG-2610-88213", stamps: ["Paid", "Visa ending 4242"] },
+    "rec-figma-sep": { title: "Invoice", number: "FIG-2609-80771", stamps: ["Paid", "Visa ending 4242"] },
+    "rec-brightline-confirmation": { title: "Payment received", number: "BIT-2026-0522", stamps: ["Payment received"] },
+    "rec-slip": { rows: [], totals: [{ label: "SALE", amount: 6400, key: "total" }], stamps: ["Mastercard ending 1187", "Approved"] },
+    "rec-amazon-refund": { title: "Refund confirmation", stamps: ["Refunded to card"] },
+    "rec-hotel": {
+      title: "Rechnung / Invoice",
+      totals: [
+        { label: "Netto", amount: 38505 },
+        { label: "MwSt. 7%", amount: 2695 },
+        { label: "Total", amount: 41200, key: "total" },
+      ],
+      stamps: ["Paid", "Amex ending 3009"],
+    },
+    "rec-uber": { title: "Trip receipt", stamps: ["Paid", "Visa ending 4242"] },
+    "rec-uber-dup": { title: "Trip receipt", layout: "invoice", stamps: ["Paid", "Visa ending 4242"] },
+  };
+
+  const docs: Doc[] = [...invoices, ...receipts].map((d) => ({ ...d, printed: printFrom(d, paper[d.id]) }));
+
+  return { docs, contacts, accounts };
 }

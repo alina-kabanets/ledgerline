@@ -46,6 +46,25 @@ export type Contact = {
   paidBefore: number;
 };
 
+export type PrintedRow = { description: string; qty: number; amount: number };
+
+// What the mock document shows. Keys link a region of the document to a form field, so
+// focusing the field can highlight where its value came from.
+export type Printed = {
+  layout: "invoice" | "till" | "slip";
+  title: string;
+  from: string;
+  to: string;
+  number?: string;
+  dates: { key: string; label: string; value: string }[];
+  rows: PrintedRow[];
+  totals: { label: string; amount: number; key?: string }[];
+  bank?: BankDetails | null;
+  stamps: string[];
+  // Field keys that are hard to read on the document.
+  blurred: string[];
+};
+
 export type SyncState = "not_synced" | "syncing" | "synced" | "failed";
 
 export type Extraction = "in_progress" | "done" | "failed";
@@ -61,13 +80,18 @@ type DocumentBase = {
   lines: LineItem[];
   meta: Record<string, FieldMeta>;
   extraction: Extraction;
+  // Why reading the file failed, in words the user can act on.
+  extractionError?: string;
+  // The document as it was printed. Never changes when fields are edited, so the
+  // preview always shows the source.
+  printed?: Printed;
   // Why the AI chose this type. Shown at upload and in review.
   typeReason: string;
   // Set when the user has dismissed a duplicate warning.
   duplicateDismissed?: boolean;
   sync: SyncState;
   // Mock switches so the demo can show failures.
-  mock?: { failSyncOnce?: boolean; failPaymentOnce?: boolean };
+  mock?: { failSyncOnce?: boolean; failPaymentOnce?: boolean; unreadable?: boolean };
   // Fields kept when the type is switched, so switching back loses nothing.
   stash?: Record<string, unknown>;
 };

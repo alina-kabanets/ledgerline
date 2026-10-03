@@ -5,14 +5,15 @@ import * as api from "./api";
 import { switchType } from "./convert";
 import { today as todayIso } from "./dates";
 import { getErp, type ErpAdapter } from "./erp";
-import { issuesFor, type RuleContext } from "./rules";
+import { findDuplicate, issuesFor, type RuleContext } from "./rules";
+import { UNREADABLE_REASON } from "./samples";
 import { seed } from "./seed";
 import { track } from "./track";
 import type { Account, Contact, Doc, Invoice, Issue } from "./types";
 
 // App state: one reducer, saved to localStorage so a refresh keeps the demo where it was.
 
-const STORAGE_KEY = "ledgerline-v1";
+const STORAGE_KEY = "ledgerline-v2";
 
 export type ToastAction = { label: string; run: () => void };
 export type Toast = { id: number; message: string; tone: "ok" | "danger"; action?: ToastAction };
@@ -115,6 +116,10 @@ type Store = {
     setErp: (id: string) => void;
     setTab: (tab: Tab) => void;
     restore: (doc: Doc) => void;
+    ingest: (docs: Doc[]) => void;
+    retryExtraction: (id: string) => void;
+    enterManually: (id: string) => void;
+    attachToInvoice: (id: string) => void;
     toast: (message: string, tone?: Toast["tone"], action?: ToastAction) => void;
     dismissToast: (id: number) => void;
   };
@@ -185,6 +190,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         track("sync_failed", { id, reason: result.reason });
         toast(`${result.reason}. You can retry from the list.`, "danger");
       }
+    };
+
+    // Reading a file takes a moment and can fail. The timer lives here, not in the upload
+    // screen, so leaving that screen does not strand a document "In Progress".
+    const read = (id: string, delay: number) => {
+      setTimeout(() => {
+        const target = find(id);
+        if (!target) return;
+        if (target.mock?.unreadable) {
+          update(id, (d) => ({ ...d, extraction: "failed", extractionError: UNREADABLE_REASON }));
+          track("extraction_failed", { id, fileName: target.fileName });
+          return;
+        }
+        update(id, (d) => ({ ...d, extraction: "done" }));
+        track("document_uploaded", { id, type: target.type, channel: target.source.channel });
+        const done = find(id);
+        if (done && findDuplicate({ ...done, extraction: "done" }, latest.current.docs)) track("duplicate_flagged", { id });
+      }, delay);
     };
 
     const settlePayment = async (id: string) => {
@@ -279,6 +302,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setErp: (id) => dispatch({ type: "erp", id }),
       setTab: (tab) => dispatch({ type: "tab", tab }),
       restore: (doc) => dispatch({ type: "add", docs: [doc] }),
+      ingest: (docs) => {
+        dispatch({ type: "add", docs });
+        docs.forEach((d, i) => read(d.id, 1400 + i * 650));
+      },
+      retryExtraction: (id) => {
+        update(id, (d) => ({ ...d, extraction: "in_progress", extractionError: undefined }));
+        read(id, 1800);
+      },
+      enterManually: (id) => update(id, (d) => ({ ...d, extraction: "done", extractionError: undefined, mock: { ...d.mock, unreadable: false }, typeReason: "Entered by hand" })),
+      attachToInvoice: (id) => {
+        const target = find(id);
+        if (!target || target.type !== "receipt" || !target.confirmsInvoiceId) return;
+        const invoice = find(target.confirmsInvoiceId);
+        dispatch({ type: "remove", id });
+        toast(`Attached to ${invoice?.type === "invoice" ? invoice.number : "the invoice"} as proof of payment`, "ok", {
+          label: "Undo",
+          run: () => dispatch({ type: "add", docs: [target] }),
+        });
+      },
       toast,
       dismissToast: (id) => dispatch({ type: "untoast", id }),
     };
