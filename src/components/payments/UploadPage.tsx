@@ -5,13 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
+import { StatusLabel } from "@/components/ui/StatusLabel";
 import { formatMoney } from "@/lib/money";
-import { findDuplicate } from "@/lib/rules";
+import { findCounterpart, findDuplicate, isEditable, rowStatus } from "@/lib/rules";
 import { rejectFile, rotation, sampleBatch, type Sample } from "@/lib/samples";
-import { useStore } from "@/lib/store";
+import { useStore, type UploadItem as Item } from "@/lib/store";
 
-// One row per file dropped. A file either becomes a document or is turned away with a reason.
-type Item = { key: string; fileName: string; docId?: string; rejected?: string };
 
 const tips = [
   { icon: PoundSterling, text: "GBP, EUR and USD invoices and receipts are supported" },
@@ -21,9 +20,11 @@ const tips = [
 ];
 
 export function UploadPage() {
-  const { state, actions, today, doc } = useStore();
+  const { state, actions, today, doc, issues } = useStore();
   const router = useRouter();
-  const [items, setItems] = useState<Item[]>([]);
+  // The batch lives in the store, so it is still here after opening a file for review.
+  const items = state.uploads;
+  const setItems = actions.setUploads;
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
@@ -66,7 +67,8 @@ export function UploadPage() {
     if (docs.length) actions.ingest(docs);
   };
 
-  const rows = items.map((item) => ({ item, doc: item.docId ? doc(item.docId) : undefined }));
+  // A file whose document was deleted during review drops out of the batch.
+  const rows = items.map((item) => ({ item, doc: item.docId ? doc(item.docId) : undefined })).filter((r) => r.item.rejected || r.doc);
   const reading = rows.filter((r) => r.doc?.extraction === "in_progress").length;
   const invoices = rows.filter((r) => r.doc?.extraction === "done" && r.doc.type === "invoice").length;
   const receipts = rows.filter((r) => r.doc?.extraction === "done" && r.doc.type === "receipt").length;
@@ -81,7 +83,7 @@ export function UploadPage() {
 
   return (
     <div className="grid h-screen grid-cols-[1fr_minmax(420px,560px)]">
-      <div className="p-5">
+      <div className="relative p-5">
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -126,7 +128,7 @@ export function UploadPage() {
       <aside className="flex min-h-0 flex-col border-l border-hairline">
         <header className="flex items-center justify-between px-6 py-4">
           <h1 className="text-[15px] font-medium">Upload</h1>
-          <Link href="/payments" aria-label="Close" className="grid size-7 place-items-center rounded-[4px] hover:bg-surface-2">
+          <Link href="/payments" aria-label="Close" onClick={() => setItems(() => [])} className="grid size-7 place-items-center rounded-[4px] hover:bg-surface-2">
             <X size={16} />
           </Link>
         </header>
@@ -140,7 +142,7 @@ export function UploadPage() {
           ))}
         </ul>
 
-        <div className="flex-1 overflow-y-auto border-t border-hairline px-6 py-4" aria-live="polite">
+        <div className="relative flex-1 overflow-y-auto border-t border-hairline px-6 py-4" aria-live="polite">
           {items.length === 0 ? (
             <p className="py-10 text-center text-[12.5px] text-muted">Files you add appear here, with what was found in each.</p>
           ) : (
@@ -164,10 +166,15 @@ export function UploadPage() {
                   {d?.extraction === "failed" && (
                     <Failure
                       reason={d.extractionError ?? "Could not read this file."}
-                      onRetry={() => actions.retryExtraction(d.id)}
+                      // Retry is only offered when trying again could help.
+                      onRetry={d.extractionRetryable ? () => actions.retryExtraction(d.id) : undefined}
                       onManual={() => {
                         actions.enterManually(d.id);
-                        router.push(`/payments/${d.id}`);
+                        router.push(`/payments/${d.id}?from=upload`);
+                      }}
+                      onRemove={() => {
+                        actions.remove(d.id);
+                        setItems((prev) => prev.filter((i) => i.key !== item.key));
                       }}
                     />
                   )}
@@ -180,15 +187,19 @@ export function UploadPage() {
                         <span className="tabular ml-auto text-[12.5px]">{formatMoney(d.total, d.currency)}</span>
                       </div>
                       <p className="mt-1.5 text-[11.5px] text-muted">{d.typeReason}</p>
+                      {/* Where this document has got to, so the batch can be worked through from here. */}
+                      <p className="mt-2">
+                        <StatusLabel status={rowStatus(d, issues(d))} />
+                      </p>
                       {(() => {
-                        const dup = !d.duplicateDismissed && findDuplicate(d, state.docs);
+                        const dup = findDuplicate(d, state.docs) ?? findCounterpart(d, state.docs);
                         return dup ? (
                           <p className="mt-2 flex items-start gap-1.5 rounded-[4px] bg-warn-soft px-2 py-1.5 text-[11.5px]">
                             <TriangleAlert size={13} className="mt-px shrink-0 text-warn" />
                             <span>
                               Looks the same as{" "}
-                              <Link href={`/payments/${dup.id}`} className="underline underline-offset-2">
-                                {dup.type === "invoice" ? dup.number : dup.merchant}
+                              <Link href={`/payments/${dup.id}?from=upload`} className="underline underline-offset-2">
+                                {dup.type === "invoice" ? `invoice ${dup.number}` : `the receipt from ${dup.merchant}`}
                               </Link>
                               , already recorded.
                             </span>
@@ -196,12 +207,14 @@ export function UploadPage() {
                         ) : null;
                       })()}
                       <div className="mt-2.5 flex gap-4 text-[11.5px]">
-                        <Link href={`/payments/${d.id}`} className="underline underline-offset-2">
-                          Review
+                        <Link href={`/payments/${d.id}?from=upload`} className="underline underline-offset-2">
+                          {isEditable(d) ? "Review" : "View"}
                         </Link>
-                        <button type="button" onClick={() => actions.changeType(d.id)} className="text-muted underline underline-offset-2 hover:text-ink">
-                          Change to {d.type === "invoice" ? "receipt" : "invoice"}
-                        </button>
+                        {isEditable(d) && (
+                          <button type="button" onClick={() => actions.changeType(d.id)} className="text-muted underline underline-offset-2 hover:text-ink">
+                            Change to {d.type === "invoice" ? "receipt" : "invoice"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -223,6 +236,7 @@ export function UploadPage() {
             href="/payments"
             variant={items.length ? "primary" : "secondary"}
             onClick={() => {
+              setItems(() => []);
               // Land on the tab that received documents.
               if (invoices === 0 && receipts > 0) actions.setTab("receipts");
               else if (invoices > 0) actions.setTab("invoices");

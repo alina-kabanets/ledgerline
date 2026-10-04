@@ -2,7 +2,8 @@
 // never hard-coded in the UI. Adding NetSuite, Campfire or Light means adding an adapter.
 
 export type GlAccount = { code: string; name: string };
-export type TaxCode = { code: string; name: string; rate: number };
+// `pct` is a whole percentage, so tax is worked out in whole pence.
+export type TaxCode = { code: string; name: string; pct: number };
 export type ExtraLineField = { key: string; label: string; options: string[] };
 
 export type ErpAdapter = {
@@ -40,11 +41,11 @@ const xero: ErpAdapter = {
     { code: "630", name: "Inventory" },
   ],
   taxCodes: [
-    { code: "INPUT2", name: "20% (VAT on Expenses)", rate: 0.2 },
-    { code: "RRINPUT", name: "5% (VAT on Expenses)", rate: 0.05 },
-    { code: "ZERORATEDINPUT", name: "Zero Rated Expenses", rate: 0 },
-    { code: "EXEMPTINPUT", name: "Exempt Expenses", rate: 0 },
-    { code: "NONE", name: "No VAT", rate: 0 },
+    { code: "INPUT2", name: "20% (VAT on Expenses)", pct: 20 },
+    { code: "RRINPUT", name: "5% (VAT on Expenses)", pct: 5 },
+    { code: "ZERORATEDINPUT", name: "Zero Rated Expenses", pct: 0 },
+    { code: "EXEMPTINPUT", name: "Exempt Expenses", pct: 0 },
+    { code: "NONE", name: "No VAT", pct: 0 },
   ],
   noTaxCode: "NONE",
   extraLineFields: [],
@@ -68,11 +69,11 @@ const netsuite: ErpAdapter = {
     { code: "1300", name: "Inventory Asset" },
   ],
   taxCodes: [
-    { code: "VAT:S-GB", name: "Standard 20%", rate: 0.2 },
-    { code: "VAT:R-GB", name: "Reduced 5%", rate: 0.05 },
-    { code: "VAT:Z-GB", name: "Zero 0%", rate: 0 },
-    { code: "VAT:E-GB", name: "Exempt", rate: 0 },
-    { code: "VAT:O-GB", name: "Outside scope", rate: 0 },
+    { code: "VAT:S-GB", name: "Standard 20%", pct: 20 },
+    { code: "VAT:R-GB", name: "Reduced 5%", pct: 5 },
+    { code: "VAT:Z-GB", name: "Zero 0%", pct: 0 },
+    { code: "VAT:E-GB", name: "Exempt", pct: 0 },
+    { code: "VAT:O-GB", name: "Outside scope", pct: 0 },
   ],
   noTaxCode: "VAT:O-GB",
   extraLineFields: [{ key: "department", label: "Department", options: ["Engineering", "Operations", "Sales", "Finance"] }],

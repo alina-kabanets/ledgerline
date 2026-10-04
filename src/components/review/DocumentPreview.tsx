@@ -45,7 +45,7 @@ export function DocumentPreview({ doc, focus }: { doc: Doc; focus: string | null
   }
 
   const mark = (key: string, extra = "") =>
-    `${extra} rounded-[3px] transition-shadow ${region === key ? "bg-accent-soft shadow-[0_0_0_3px_var(--color-accent)]" : ""} ${p.blurred.includes(key) ? "blur-[1.5px]" : ""}`;
+    `${extra} rounded-[3px] transition-shadow ${region === key ? "bg-accent-soft text-ink shadow-[0_0_0_3px_var(--color-accent)]" : ""} ${p.blurred.includes(key) ? "blur-[1.5px]" : ""}`;
 
   if (p.layout !== "invoice") {
     // A till receipt or a card slip: narrow paper, monospaced.

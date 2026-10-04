@@ -1,5 +1,6 @@
 import { addDays } from "./dates";
 import { taxFor, erps } from "./erp";
+import { roundHalfAway, taxOn } from "./money";
 import { printFrom } from "./printed";
 import type { Account, BankDetails, Channel, Contact, Doc, FieldMeta, Invoice, LineItem, Printed, Receipt } from "./types";
 
@@ -23,30 +24,21 @@ export function seed(today: string): Seed {
   let n = 0;
   const lineId = () => `l${++n}`;
 
-  const line = (
-    description: string,
-    quantity: number,
-    unitAmount: number,
-    glCode: string | null,
-    taxCode: string | null,
-    over: Partial<LineItem> = {},
-  ): LineItem => {
-    const rate = taxFor(erps.xero, taxCode)?.rate ?? 0;
-    return {
-      id: lineId(),
-      description,
-      quantity,
-      unitAmount,
-      tax: Math.round(quantity * unitAmount * rate),
-      glCode,
-      taxCode,
-      glMeta: DOC,
-      taxMeta: DOC,
-      ...over,
-    };
-  };
+  const line = (description: string, quantity: number, unitAmount: number, glCode: string | null, taxCode: string | null, over: Partial<LineItem> = {}): LineItem => ({
+    id: lineId(),
+    description,
+    quantity,
+    unitAmount,
+    tax: taxOn(roundHalfAway(quantity * unitAmount), taxFor(erps.xero, taxCode)?.pct ?? 0),
+    glCode,
+    taxCode,
+    amountMeta: DOC,
+    glMeta: DOC,
+    taxMeta: DOC,
+    ...over,
+  });
 
-  const sum = (lines: LineItem[]) => lines.reduce((s, l) => s + Math.round(l.quantity * l.unitAmount) + l.tax, 0);
+  const sum = (lines: LineItem[]) => lines.reduce((s, l) => s + roundHalfAway(l.quantity * l.unitAmount) + l.tax, 0);
   const at = (daysAgo: number, time = "09:14") => `${addDays(today, -daysAgo)}T${time}:00`;
   const src = (channel: Channel, by: string, daysAgo: number, time?: string) => ({ channel, by, at: at(daysAgo, time) });
 
@@ -65,46 +57,56 @@ export function seed(today: string): Seed {
     { id: "c-brightline", name: "Brightline IT", bank: bank("Brightline IT", "40-47-84", "12094476"), paidBefore: 9 },
     { id: "c-canal", name: "Canal Street Lettings", bank: bank("Canal Street Lettings", "20-00-00", "53910284"), paidBefore: 3 },
     { id: "c-fibrelink", name: "Fibrelink Telecom", bank: bank("Fibrelink Telecom", "83-06-08", "00716642"), paidBefore: 2 },
+    { id: "c-shield", name: "Shield Insurance", bank: bank("Shield Insurance", "11-04-27", "40028816"), paidBefore: 5 },
   ];
   const bankOf = (id: string) => contacts.find((c) => c.id === id)?.bank ?? null;
 
-  const invoice = (o: Partial<Invoice> & Pick<Invoice, "id" | "supplier" | "number" | "lines" | "contactId">): Invoice => ({
-    type: "invoice",
-    status: "draft",
-    fileName: `${o.number}.pdf`,
-    source: src("email", "accounts@" + o.supplier.split(/[ ,]/)[0].toLowerCase() + ".example", 1),
-    entity: ENTITY,
-    currency: "GBP",
-    total: sum(o.lines),
-    meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, bank: DOC },
-    extraction: "done",
-    typeReason: "Has a due date and an amount owed",
-    sync: "not_synced",
-    reference: o.number,
-    issuedOn: addDays(today, -12),
-    dueOn: addDays(today, 18),
-    documentBank: bankOf(o.contactId ?? ""),
-    ...o,
-  });
+  const invoice = (o: Partial<Invoice> & Pick<Invoice, "id" | "supplier" | "number" | "lines" | "contactId">): Invoice => {
+    const source = o.source ?? src("email", "accounts@" + o.supplier.split(/[ ,]/)[0].toLowerCase() + ".example", 1);
+    return {
+      type: "invoice",
+      status: "draft",
+      fileName: `${o.number}.pdf`,
+      updatedAt: source.at,
+      entity: ENTITY,
+      currency: "GBP",
+      total: sum(o.lines),
+      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, currency: DOC, bank: DOC },
+      extraction: "done",
+      typeReason: "Has a due date and an amount owed",
+      sync: "not_synced",
+      reference: o.number,
+      issuedOn: addDays(today, -12),
+      dueOn: addDays(today, 18),
+      documentBank: bankOf(o.contactId ?? ""),
+      ...o,
+      source,
+    };
+  };
 
-  const receipt = (o: Partial<Receipt> & Pick<Receipt, "id" | "merchant" | "lines">): Receipt => ({
-    type: "receipt",
-    status: "draft",
-    fileName: `${o.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`,
-    source: src("whatsapp", "Sam Okafor", 2),
-    entity: ENTITY,
-    currency: "GBP",
-    total: sum(o.lines),
-    meta: { merchant: DOC, paidOn: DOC, total: DOC },
-    extraction: "done",
-    typeReason: "No due date or payment request",
-    sync: "not_synced",
-    paidOn: addDays(today, -2),
-    ...o,
-  });
+  const receipt = (o: Partial<Receipt> & Pick<Receipt, "id" | "merchant" | "lines">): Receipt => {
+    const source = o.source ?? src("whatsapp", "Sam Okafor", 2);
+    return {
+      type: "receipt",
+      status: "draft",
+      fileName: `${o.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`,
+      updatedAt: source.at,
+      entity: ENTITY,
+      currency: "GBP",
+      total: sum(o.lines),
+      meta: { merchant: DOC, paidOn: DOC, total: DOC, currency: DOC },
+      extraction: "done",
+      typeReason: "No due date or payment request",
+      sync: "not_synced",
+      paidOn: addDays(today, -2),
+      ...o,
+      source,
+    };
+  };
 
   const stackwiseReason = "You coded this line to 485 — Subscriptions last time. The same code is suggested.";
   const usedBefore = (code: string, name: string, times: number) => memory(`Coded to ${code} — ${name} on the last ${times} invoices from this supplier.`);
+  const allDoc = { supplier: DOC, number: DOC, issuedOn: DOC, total: DOC, currency: DOC, bank: DOC };
 
   const okoroLines = [
     line("Legal review — supplier contracts", 14, 68000, "441", "INPUT2", { glMeta: usedBefore("441", "Legal Expenses", 3) }),
@@ -120,7 +122,7 @@ export function seed(today: string): Seed {
       source: src("upload", CURRENT_USER, 0, "08:52"),
       issuedOn: addDays(today, -4),
       dueOn: addDays(today, 26),
-      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: unsure("Two dates on the document. Chose the one labelled “Payment due”."), total: DOC, bank: DOC },
+      meta: { ...allDoc, dueOn: unsure("Two dates on the document. Chose the one labelled “Payment due”.") },
       lines: [
         line("Brand strategy workshop", 1, 520000, "412", "INPUT2", { glMeta: usedBefore("412", "Consulting & Accounting", 2) }),
         line("Workshop materials", 1, 236830, "412", "INPUT2", { glMeta: usedBefore("412", "Consulting & Accounting", 2) }),
@@ -182,9 +184,9 @@ export function seed(today: string): Seed {
     invoice({
       id: "inv-carver-dup",
       supplier: "Carver Interiors",
-      number: "CI-2026-0091",
+      // Same invoice, forwarded again later. The number is typed differently on purpose.
+      number: "CI 2026 0091",
       contactId: "c-carver",
-      // Same supplier and number as the one above, forwarded again later.
       source: src("email", "billing@carver.example", 1, "16:40"),
       issuedOn: addDays(today, -15),
       dueOn: addDays(today, 15),
@@ -198,7 +200,7 @@ export function seed(today: string): Seed {
       issuedOn: addDays(today, -6),
       dueOn: addDays(today, 24),
       documentBank: null,
-      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, bank: { origin: "missing", reason: "No bank details on the document." } },
+      meta: { ...allDoc, dueOn: DOC, bank: { origin: "missing", reason: "No bank details on the document." } },
       lines: [line("Waste collection — quarterly", 1, 1247336, "429", "INPUT2")],
     }),
     invoice({
@@ -223,7 +225,6 @@ export function seed(today: string): Seed {
       issuedOn: addDays(today, -10),
       dueOn: addDays(today, 14),
       lines: [line("Recruitment fee — senior engineer", 1, 1231240, "412", "INPUT2")],
-      mock: { failSyncOnce: true },
     }),
     invoice({
       id: "inv-swift",
@@ -246,7 +247,6 @@ export function seed(today: string): Seed {
       issuedOn: addDays(today, -8),
       dueOn: addDays(today, 10),
       lines: [line("Product photography — autumn range", 1, 530000, "400", "NONE", { taxMeta: { origin: "document", reason: "No VAT shown on the document." } })],
-      mock: { failPaymentOnce: true },
     }),
     invoice({
       id: "inv-patel",
@@ -259,6 +259,18 @@ export function seed(today: string): Seed {
       lines: [line("Accounting services — Q3", 1, 444175, "412", "INPUT2", { glMeta: usedBefore("412", "Consulting & Accounting", 7) })],
     }),
     invoice({
+      id: "inv-shield",
+      supplier: "Shield Insurance",
+      number: "SH-2026-1180",
+      contactId: "c-shield",
+      // Already scheduled: money is promised from the fund but has not left.
+      status: "scheduled",
+      issuedOn: addDays(today, -20),
+      dueOn: addDays(today, 8),
+      lines: [line("Insurance premium — annual", 1, 720000, "429", "EXEMPTINPUT")],
+      payment: { accountId: "mmf", payOn: addDays(today, 8) },
+    }),
+    invoice({
       id: "inv-brightline",
       supplier: "Brightline IT",
       number: "BIT-2026-0522",
@@ -268,7 +280,7 @@ export function seed(today: string): Seed {
       issuedOn: addDays(today, -30),
       dueOn: addDays(today, -6),
       lines: [line("Managed IT support — September", 1, 1116888, "463", "INPUT2")],
-      payment: { state: "paid", accountId: "mmf", payOn: addDays(today, -8) },
+      payment: { accountId: "mmf", payOn: addDays(today, -8) },
     }),
     invoice({
       id: "inv-canal",
@@ -280,18 +292,18 @@ export function seed(today: string): Seed {
       issuedOn: addDays(today, -26),
       dueOn: addDays(today, -4),
       lines: [line("Office rent — October", 1, 1607250, "469", "INPUT2")],
-      payment: { state: "paid", accountId: "mmf", payOn: addDays(today, -5) },
+      payment: { accountId: "mmf", payOn: addDays(today, -5) },
     }),
     invoice({
       id: "inv-fibrelink",
       supplier: "Fibrelink Telecom",
       number: "FL-2026-0733",
       contactId: "c-fibrelink",
-      status: "paid",
+      status: "payment_failed",
       issuedOn: addDays(today, -24),
       dueOn: addDays(today, -2),
-      lines: [line("Broadband and telephony — Q3", 1, 1380847, "489", "INPUT2")],
-      payment: { state: "failed", accountId: "mmf", payOn: addDays(today, -2) },
+      lines: [line("Broadband and telephony — Q3", 1, 380847, "489", "INPUT2")],
+      payment: { accountId: "business", payOn: addDays(today, -2), failure: "The recipient bank rejected the payment" },
     }),
   ];
 
@@ -335,7 +347,7 @@ export function seed(today: string): Seed {
       source: src("whatsapp", "Sam Okafor", 0, "13:05"),
       fileName: "IMG_4410.jpg",
       paidOn: today,
-      meta: { merchant: DOC, paidOn: DOC, total: unsure("The photo is blurred at the total. Read as 12.40; it could be 12.48.") },
+      meta: { merchant: DOC, paidOn: DOC, currency: DOC, total: unsure("The photo is blurred at the total. Read as 12.40; it could be 12.48.") },
       lines: [line("Team lunch", 1, 1033, "420", "INPUT2", { glMeta: memory("Coded to 420 — Entertainment on the last 3 receipts from this merchant.") })],
     }),
     uber("rec-uber", "email", "Priya Shah", "10:02"),
@@ -357,6 +369,7 @@ export function seed(today: string): Seed {
       paidOn: addDays(today, -1),
       total: 3175,
       lines: [
+        // One line cannot be right here: the tax printed (2.42) is not 20% of the whole.
         line("Office supplies and snacks", 1, 2933, "453", "INPUT2", {
           tax: 242,
           taxMeta: unsure("The receipt shows two VAT rates: food at 0% and other goods at 20%. Itemise it to split them."),
@@ -412,6 +425,8 @@ export function seed(today: string): Seed {
         }),
       ],
     }),
+    // A payment confirmation for an invoice already paid. Nothing marks it as
+    // such here: the rule finds it by matching supplier and amount.
     receipt({
       id: "rec-brightline-confirmation",
       merchant: "Brightline IT",
@@ -419,7 +434,6 @@ export function seed(today: string): Seed {
       fileName: "payment-received-0522.pdf",
       paidOn: addDays(today, -8),
       typeReason: "Marked “Payment received”",
-      confirmsInvoiceId: "inv-brightline",
       lines: [line("Payment received — BIT-2026-0522", 1, 1116888, "463", "INPUT2")],
     }),
     figma("rec-figma-sep", 31, { status: "submitted", sync: "synced" }),
@@ -448,6 +462,7 @@ export function seed(today: string): Seed {
   const accounts: Account[] = [
     { id: "mmf", name: "Treasury Reserve", currency: "GBP", balance: 4825000, settlementDays: 2 },
     { id: "business", name: "Operating Account", currency: "GBP", balance: 612040, settlementDays: 0 },
+    { id: "eur", name: "EUR Account", currency: "EUR", balance: 1200000, settlementDays: 0 },
   ];
 
   // How each mock document looks on paper where it differs from the extracted fields.
@@ -459,6 +474,7 @@ export function seed(today: string): Seed {
         { key: "dueOn", label: "Payment due", value: addDays(today, 26) },
       ],
     },
+    "inv-shield": { totals: [{ label: "Total (exempt from VAT)", amount: 720000, key: "total" }] },
     "rec-pret": { blurred: ["total"] },
     "rec-tesco": {
       rows: [

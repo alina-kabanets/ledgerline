@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Select } from "@/components/ui/Select";
 import { erps } from "@/lib/erp";
 import { ENTITY } from "@/lib/seed";
 import { useStore } from "@/lib/store";
@@ -100,21 +101,17 @@ export function Sidebar() {
         {/* Not part of the product: controls for whoever is watching the demo. */}
         <div className="mb-2 rounded-[6px] border border-dashed border-line p-2 text-[11px] text-muted">
           <div className="mb-1.5 uppercase tracking-wider">Demo controls</div>
-          <label className="mb-1.5 flex items-center justify-between gap-2">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
             <span>ERP</span>
-            <select
-              value={state.erpId}
-              onChange={(e) => actions.setErp(e.target.value)}
-              className="rounded-[4px] border border-line bg-white px-1 py-0.5 text-[11px] text-ink"
-            >
-              {Object.values(erps).map((erp) => (
-                <option key={erp.id} value={erp.id}>
-                  {erp.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={actions.reset} className="underline underline-offset-2 hover:text-ink">
+            <div className="w-[92px]">
+              <Select variant="small" label="ERP" value={state.erpId} options={Object.values(erps).map((erp) => ({ value: erp.id, label: erp.name }))} onChange={actions.setErp} />
+            </div>
+          </div>
+          {/* Stands in for time passing: takes every scheduled payment as if its date had come. */}
+          <button type="button" onClick={actions.runScheduled} className="mb-1.5 block text-left underline underline-offset-2 hover:text-ink">
+            Run scheduled payments
+          </button>
+          <button type="button" onClick={actions.reset} className="block underline underline-offset-2 hover:text-ink">
             Reset demo data
           </button>
         </div>

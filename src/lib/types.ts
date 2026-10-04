@@ -3,18 +3,27 @@ export type Currency = "GBP" | "EUR" | "USD";
 // How a document arrived. Only "upload" is real in this build; the rest are mocked.
 export type Channel = "upload" | "email" | "whatsapp" | "xero";
 
+// `at` is local time, YYYY-MM-DDTHH:MM:SS, so stamps from every source compare as text.
 export type Source = { channel: Channel; by: string; at: string };
 
-// Where a value came from. Shown next to every extracted field.
+// Where a value came from. Shown next to every extracted value.
 export type Origin = "document" | "memory" | "user" | "missing";
 
 export type FieldMeta = {
   origin: Origin;
-  // The AI is not sure. The field is flagged until a person confirms or edits it.
+  // The AI is not sure. The value is flagged until a person confirms or edits it.
   uncertain?: boolean;
   // Shown in the "Why this value" tooltip.
   reason?: string;
 };
+
+// The fields each type has. Flags are only ever kept for fields the type actually shows.
+export const INVOICE_FIELDS = ["supplier", "number", "issuedOn", "dueOn", "total", "currency", "bank"] as const;
+export const RECEIPT_FIELDS = ["merchant", "paidOn", "total", "currency"] as const;
+export type InvoiceField = (typeof INVOICE_FIELDS)[number];
+export type ReceiptField = (typeof RECEIPT_FIELDS)[number];
+export type FieldKey = InvoiceField | ReceiptField;
+export type Meta = Partial<Record<FieldKey, FieldMeta>>;
 
 export type LineItem = {
   id: string;
@@ -26,6 +35,8 @@ export type LineItem = {
   tax: number;
   glCode: string | null;
   taxCode: string | null;
+  // Origin of the description, quantity and amounts as a group.
+  amountMeta?: FieldMeta;
   glMeta?: FieldMeta;
   taxMeta?: FieldMeta;
   // Extra fields a given ERP requires per line, e.g. NetSuite department.
@@ -69,40 +80,55 @@ export type SyncState = "not_synced" | "syncing" | "synced" | "failed";
 
 export type Extraction = "in_progress" | "done" | "failed";
 
+// Warnings a person has looked at and chosen to override. Each is recorded separately,
+// so overriding one never silences another.
+export type Override = "duplicate" | "counterpart" | "bank_changed" | "contact_mismatch";
+
+// Fields kept when the type is switched, so switching back loses nothing.
+export type Stash = {
+  invoice?: Pick<Invoice, "number" | "reference" | "issuedOn" | "dueOn" | "contactId" | "documentBank">;
+  receipt?: Pick<Receipt, "paidOn" | "slipOnly">;
+  meta?: Meta;
+};
+
 type DocumentBase = {
   id: string;
   fileName: string;
   source: Source;
+  // When the document last changed. Shown as "Last action".
+  updatedAt: string;
   entity: string;
   currency: Currency;
   // Total printed on the document, minor units. Lines must add up to this.
   total: number;
   lines: LineItem[];
-  meta: Record<string, FieldMeta>;
+  meta: Meta;
   extraction: Extraction;
   // Why reading the file failed, in words the user can act on.
   extractionError?: string;
+  // False when trying again cannot help, such as a blurred photo.
+  extractionRetryable?: boolean;
   // The document as it was printed. Never changes when fields are edited, so the
   // preview always shows the source.
   printed?: Printed;
   // Why the AI chose this type. Shown at upload and in review.
   typeReason: string;
-  // Set when the user has dismissed a duplicate warning.
-  duplicateDismissed?: boolean;
+  overrides?: Override[];
   sync: SyncState;
-  // Mock switches so the demo can show failures.
-  mock?: { failSyncOnce?: boolean; failPaymentOnce?: boolean; unreadable?: boolean };
-  // Fields kept when the type is switched, so switching back loses nothing.
-  stash?: Record<string, unknown>;
+  stash?: Stash;
 };
 
-export type InvoiceStatus = "draft" | "ready_to_pay" | "paid";
+// One field says where an invoice is. "paid" means the money has gone.
+export type InvoiceStatus = "draft" | "ready_to_pay" | "scheduled" | "processing" | "payment_failed" | "paid";
 
 export type Payment = {
-  state: "processing" | "paid" | "failed";
+  // "outside" when the invoice was paid somewhere else.
   accountId: string;
   payOn: string;
+  failure?: string;
 };
+
+export type Attachment = { fileName: string; by: string; at: string; note: string };
 
 export type Invoice = DocumentBase & {
   type: "invoice";
@@ -115,9 +141,8 @@ export type Invoice = DocumentBase & {
   contactId: string | null;
   // Bank details as printed on the document.
   documentBank: BankDetails | null;
-  // The user has confirmed a change of bank details for this invoice.
-  bankChangeConfirmed?: boolean;
   payment?: Payment;
+  attachments?: Attachment[];
 };
 
 export type ReceiptStatus = "draft" | "submitted";
@@ -129,8 +154,6 @@ export type Receipt = DocumentBase & {
   paidOn: string;
   // A card terminal slip: total only, nothing to itemise.
   slipOnly?: boolean;
-  // Looks like the payment confirmation for an invoice already paid from here.
-  confirmsInvoiceId?: string;
 };
 
 export type Doc = Invoice | Receipt;
@@ -145,19 +168,23 @@ export type Account = {
 };
 
 export type IssueCode =
+  | "missing_field"
+  | "not_payable"
   | "missing_contact"
   | "missing_payment_details"
+  | "contact_mismatch"
   | "bank_changed"
   | "duplicate"
+  | "counterpart"
   | "totals_mismatch"
+  | "tax_mismatch"
   | "uncoded"
   | "invalid_code"
   | "missing_erp_field"
+  | "no_description"
   | "uncertain"
-  | "missing_field"
   | "overdue"
   | "card_slip"
-  | "confirms_invoice"
   | "first_time_supplier";
 
 export type Issue = {

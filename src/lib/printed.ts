@@ -1,4 +1,4 @@
-import { linesNet, linesTax, lineNet } from "./rules";
+import { lineNet, linesNet, linesTax } from "./rules";
 import type { Doc, Printed } from "./types";
 
 // Builds the mock document from a freshly extracted record. In a real system this is the

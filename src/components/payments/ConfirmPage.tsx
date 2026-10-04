@@ -1,18 +1,20 @@
 "use client";
 
-import { ArrowLeft, Check, Clock, Info, ShieldAlert, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, Clock, Info, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { DateInput } from "@/components/ui/DateInput";
 import { Money } from "@/components/ui/Money";
+import { Select } from "@/components/ui/Select";
 import { formatDate, formatLongDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { batchTotal, earliestPayDate, isBlocked } from "@/lib/rules";
+import { available, committed, earliestPayDate, isBlocked } from "@/lib/rules";
 import { useStore } from "@/lib/store";
 import type { Currency, Invoice } from "@/lib/types";
 
-type Done = { count: number; totals: [Currency, number][]; accountName: string; settlementDays: number };
+type Done = { count: number; total: number; currency: Currency; accountName: string; settlementDays: number; refused: string[]; later: number; left: number };
 
 export function ConfirmPage() {
   const { state, actions, issues, today } = useStore();
@@ -30,15 +32,25 @@ export function ConfirmPage() {
     router.push("/payments");
   };
 
-  if (done) return <Initiated done={done} onReturn={back} />;
-
-  // Only invoices that are still ready and unblocked can be paid, whatever was selected.
-  const invoices = state.batch
-    .map((id) => state.docs.find((d) => d.id === id))
-    .filter((d): d is Invoice => d?.type === "invoice" && d.status === "ready_to_pay" && !isBlocked(issues(d)));
+  if (done) return <Initiated done={done} onReturn={back} onMore={() => setDone(null)} />;
 
   const account = state.accounts.find((a) => a.id === accountId) ?? state.accounts[0];
   const earliest = earliestPayDate(account, today);
+  const free = available(account, state.docs);
+  const promised = committed(account.id, state.docs);
+
+  // Everything in the batch is shown. What cannot be paid from this account is listed
+  // with the reason, never dropped without a word.
+  const batch = state.batch.map((id) => state.docs.find((d) => d.id === id)).filter((d): d is Invoice => d?.type === "invoice");
+  const reasonNot = (inv: Invoice): string | null => {
+    if (inv.status !== "ready_to_pay") return "No longer Ready to Pay";
+    const found = issues(inv);
+    if (isBlocked(found)) return found.find((i) => i.blocking)?.label ?? "Has an open issue";
+    if (inv.currency !== account.currency) return `In ${inv.currency}: choose a ${inv.currency} account`;
+    return null;
+  };
+  const invoices = batch.filter((inv) => reasonNot(inv) === null);
+  const leftOut = batch.filter((inv) => reasonNot(inv) !== null);
 
   // "On the due date" where possible; never earlier than the money can leave the account.
   const payOn = (inv: Invoice) => {
@@ -48,22 +60,19 @@ export function ConfirmPage() {
     return inv.dueOn > earliest ? inv.dueOn : earliest;
   };
 
-  const due = batchTotal(invoices, account.currency);
-  const shortBy = due - account.balance;
-  const otherCurrencies = [...new Set(invoices.filter((i) => i.currency !== account.currency).map((i) => i.currency))];
-
-  const totals = new Map<Currency, number>();
-  for (const inv of invoices) totals.set(inv.currency, (totals.get(inv.currency) ?? 0) + inv.total);
+  const due = invoices.reduce((sum, inv) => sum + inv.total, 0);
+  const shortBy = due - free;
 
   const flags = (inv: Invoice) => {
     const contact = state.contacts.find((c) => c.id === inv.contactId);
     const list: string[] = [];
     if (contact?.paidBefore === 0) list.push("First payment to this supplier");
-    if (inv.bankChangeConfirmed) list.push("Bank details changed and confirmed");
+    if (inv.overrides?.includes("bank_changed")) list.push("Bank details differ from the document; confirmed");
+    if (inv.overrides?.includes("contact_mismatch")) list.push(`Paying ${contact?.name ?? "a contact"} though the invoice is from ${inv.supplier}`);
     if (inv.dueOn < today) list.push(`Overdue since ${formatDate(inv.dueOn)}`);
     else if (payOn(inv) > inv.dueOn) {
       // Point to an account that could still make the date, if there is one.
-      const faster = state.accounts.find((a) => a.id !== account.id && earliestPayDate(a, today) <= inv.dueOn && a.balance >= inv.total);
+      const faster = state.accounts.find((a) => a.id !== account.id && a.currency === inv.currency && earliestPayDate(a, today) <= inv.dueOn && available(a, state.docs) >= inv.total);
       list.push(`Arrives after the due date (${formatDate(inv.dueOn)})${faster ? `. ${faster.name} could pay it on time` : ""}`);
     }
     return list;
@@ -79,16 +88,25 @@ export function ConfirmPage() {
   const remove = (id: string) => actions.setBatch(state.batch.filter((x) => x !== id));
 
   const schedule = async () => {
-    // Guard against a second click while the first request is in flight.
+    // The button is disabled while a request is in flight, and the store refuses any
+    // invoice that is no longer Ready to Pay, so a second click or a second tab cannot
+    // pay the same invoice twice.
     if (submitting || shortBy > 0 || invoices.length === 0) return;
     setSubmitting(true);
-    const summary: Done = { count: invoices.length, totals: [...totals], accountName: account.name, settlementDays: account.settlementDays };
-    await actions.pay(
-      invoices.map((i) => i.id),
-      account.id,
-      Object.fromEntries(invoices.map((i) => [i.id, payOn(i)])),
-    );
-    setDone(summary);
+    const chosen = Object.fromEntries(invoices.map((i) => [i.id, payOn(i)]));
+    const outcome = await actions.schedule(invoices.map((i) => i.id), account.id, chosen);
+    const paidNow = outcome.scheduled.filter((id) => chosen[id] <= earliest).length;
+    setSubmitting(false);
+    setDone({
+      count: outcome.scheduled.length,
+      total: invoices.filter((i) => outcome.scheduled.includes(i.id)).reduce((sum, i) => sum + i.total, 0),
+      currency: account.currency,
+      accountName: account.name,
+      settlementDays: account.settlementDays,
+      refused: outcome.refused.map((r) => r.reason),
+      later: outcome.scheduled.length - paidNow,
+      left: leftOut.length,
+    });
   };
 
   return (
@@ -102,23 +120,25 @@ export function ConfirmPage() {
 
       <div className="mt-5 flex items-center justify-between border-b border-hairline pb-5">
         <h1 className="text-[22px] font-light">Confirm your payments</h1>
-        <label className="flex items-center gap-2 text-[12.5px] text-muted">
+        <div className="flex items-center gap-2 text-[12.5px] text-muted">
           Pay
-          <select
+          <Select
+            label="When to pay"
+            align="right"
             value={mode}
-            onChange={(e) => {
-              setMode(e.target.value as "due" | "asap");
+            options={[
+              { value: "due", label: "on each due date" },
+              { value: "asap", label: "as soon as possible" },
+            ]}
+            onChange={(next) => {
+              setMode(next);
               setDates({});
             }}
-            className="h-8 rounded-[4px] border border-line bg-white px-2 text-[12.5px] text-ink"
-          >
-            <option value="due">on each due date</option>
-            <option value="asap">as soon as possible</option>
-          </select>
-        </label>
+          />
+        </div>
       </div>
 
-      {invoices.length === 0 ? (
+      {batch.length === 0 ? (
         <div className="py-24 text-center">
           <p className="text-[15px]">No invoices to pay.</p>
           <p className="mt-1 text-muted">Select invoices that are Ready to Pay on the Payments page.</p>
@@ -131,78 +151,75 @@ export function ConfirmPage() {
           <section aria-label="Pay from">
             <h2 className="mb-2 text-[12px] text-muted">Where to make the payment from</h2>
             <div role="radiogroup" aria-label="Account" className="flex flex-col gap-2">
-              {state.accounts.map((a) => (
-                <label key={a.id} className={`flex cursor-pointer items-center gap-3 rounded-[6px] border px-4 py-3.5 ${a.id === account.id ? "border-ink" : "border-line hover:border-faint"}`}>
-                  <input type="radio" name="account" className="sr-only" checked={a.id === account.id} onChange={() => setAccountId(a.id)} />
-                  <span aria-hidden className={`grid size-4 place-items-center rounded-full border ${a.id === account.id ? "border-ink" : "border-faint"}`}>
-                    {a.id === account.id && <span className="size-2 rounded-full bg-ink" />}
-                  </span>
-                  <span className="flex-1">
-                    <span className="block text-[14px]">{a.name}</span>
-                    <span className="block text-[11.5px] text-muted">
-                      {a.settlementDays === 0 ? "Pays the same day" : `Transfers take ${a.settlementDays === 2 ? "1-2" : a.settlementDays} business days to settle`}
+              {state.accounts.map((a) => {
+                const held = committed(a.id, state.docs);
+                return (
+                  <label key={a.id} className={`flex cursor-pointer items-center gap-3 rounded-[6px] border px-4 py-3.5 ${a.id === account.id ? "border-ink" : "border-line hover:border-faint"}`}>
+                    <input type="radio" name="account" className="sr-only" checked={a.id === account.id} onChange={() => setAccountId(a.id)} />
+                    <span aria-hidden className={`grid size-4 place-items-center rounded-full border ${a.id === account.id ? "border-ink" : "border-faint"}`}>
+                      {a.id === account.id && <span className="size-2 rounded-full bg-ink" />}
                     </span>
-                  </span>
-                  <Money amount={a.balance} currency={a.currency} />
-                </label>
-              ))}
+                    <span className="flex-1">
+                      <span className="block text-[14px]">{a.name}</span>
+                      <span className="block text-[11.5px] text-muted">
+                        {a.settlementDays === 0 ? "Pays the same day" : `Transfers take ${a.settlementDays === 2 ? "1-2" : a.settlementDays} business days to settle`}
+                        {held > 0 && ` · ${formatMoney(held, a.currency)} already scheduled`}
+                      </span>
+                    </span>
+                    <Money amount={a.balance} currency={a.currency} />
+                  </label>
+                );
+              })}
             </div>
 
             {shortBy > 0 && (
               <p role="alert" className="mt-3 flex items-start gap-2 rounded-[4px] bg-danger-soft px-3 py-2.5 text-[12.5px]">
                 <TriangleAlert size={14} className="mt-0.5 shrink-0 text-danger" />
                 <span>
-                  This account is {formatMoney(shortBy, account.currency)} short of the {formatMoney(due, account.currency)} due. Choose another account, remove a payment, or top up first.
+                  This account has {formatMoney(free, account.currency)} free{promised > 0 ? ` after ${formatMoney(promised, account.currency)} already scheduled` : ""}. That is {formatMoney(shortBy, account.currency)} short of the{" "}
+                  {formatMoney(due, account.currency)} due. Choose another account, remove a payment, or top up first.
                 </span>
               </p>
             )}
 
-            <Button size="lg" className="mt-4 w-full" disabled={submitting || shortBy > 0} onClick={schedule}>
-              {submitting ? "Scheduling…" : `Schedule ${invoices.length} ${invoices.length === 1 ? "Payment" : "Payments"}`}
+            <Button size="lg" className="mt-4 w-full" disabled={submitting || shortBy > 0 || invoices.length === 0} onClick={schedule}>
+              {submitting ? "Scheduling…" : invoices.length === 0 ? "Nothing to pay from this account" : `Schedule ${invoices.length} ${invoices.length === 1 ? "Payment" : "Payments"}`}
             </Button>
 
-            <ul className="mt-4 flex flex-col gap-2.5 rounded-[6px] bg-surface p-4 text-[12px] text-ink-2">
-              <li className="flex items-start gap-2.5">
-                <Clock size={14} className="mt-0.5 shrink-0" />
-                Payments are initiated on the date shown, withdrawal times allowing. The earliest this account can pay is {formatLongDate(earliest)}.
-              </li>
-              {otherCurrencies.length > 0 && (
-                <li className="flex items-start gap-2.5">
-                  <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                  {otherCurrencies.join(" and ")} payments are converted from {account.currency} on the day and may take up to 5 working days. The balance check above covers {account.currency} invoices only.
-                </li>
-              )}
-            </ul>
+            <p className="mt-4 flex items-start gap-2.5 rounded-[6px] bg-surface p-4 text-[12px] text-ink-2">
+              <Clock size={14} className="mt-0.5 shrink-0" />
+              Each payment leaves on the date shown. The earliest this account can pay is {formatLongDate(earliest)}. An invoice is paid from an account in its own currency.
+            </p>
           </section>
 
           <section aria-label="Payments">
-            <div className="text-[12px] text-muted">Total</div>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-6">
-              {[...totals].map(([currency, amount], i) => (
-                <Money key={currency} amount={amount} currency={currency} size={i === 0 ? "hero" : "sub"} />
-              ))}
+            <div className="text-[12px] text-muted">Total from this account</div>
+            <div className="mt-1">
+              <Money amount={due} currency={account.currency} size="hero" />
             </div>
 
-            <div className={`mt-5 rounded-[6px] border p-3.5 text-[12.5px] ${flagged.length ? "border-warn/40 bg-warn-soft" : "border-hairline bg-surface"}`}>
-              {flagged.length === 0 ? (
-                <p className="flex items-center gap-2">
-                  <Check size={14} className="text-ok" /> Nothing unusual in this batch: known suppliers, unchanged bank details, on time.
-                </p>
-              ) : (
-                <>
-                  <p className="mb-1.5 flex items-center gap-2 font-medium">
-                    <TriangleAlert size={14} className="text-warn" /> Check before paying
+            {invoices.length > 0 && (
+              <div className={`mt-5 rounded-[6px] border p-3.5 text-[12.5px] ${flagged.length ? "border-warn/40 bg-warn-soft" : "border-hairline bg-surface"}`}>
+                {flagged.length === 0 ? (
+                  <p className="flex items-center gap-2">
+                    <Check size={14} className="text-ok" /> Nothing unusual in this batch: known suppliers, unchanged bank details, on time.
                   </p>
-                  <ul className="flex flex-col gap-1">
-                    {flagged.map(({ inv, list }) => (
-                      <li key={inv.id}>
-                        <span className="font-medium">{inv.supplier}:</span> {list.join(". ")}.
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
+                ) : (
+                  <>
+                    <p className="mb-1.5 flex items-center gap-2 font-medium">
+                      <TriangleAlert size={14} className="text-warn" /> Check before paying
+                    </p>
+                    <ul className="flex flex-col gap-1">
+                      {flagged.map(({ inv, list }) => (
+                        <li key={inv.id}>
+                          <span className="font-medium">{inv.supplier}:</span> {list.join(". ")}.
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
 
             {[...groups].map(([date, list]) => (
               <div key={date} className="mt-6">
@@ -221,20 +238,23 @@ export function ConfirmPage() {
                         <Link href={`/payments/${inv.id}`} className="underline underline-offset-2">
                           Review
                         </Link>
-                        <label className="flex items-center gap-1.5 text-muted">
+                        <div className="flex items-center gap-1.5 text-muted">
                           Pay on
-                          <input
-                            type="date"
+                          <DateInput
+                            size="sm"
+                            label={`Pay ${inv.supplier} on`}
                             min={earliest}
                             value={payOn(inv)}
-                            onChange={(e) => {
-                              if (!e.target.value) return;
-                              setDates({ ...dates, [inv.id]: e.target.value });
-                              actions.toast("Payment date updated");
+                            onChange={(value) => {
+                              if (!value) return;
+                              // A date this account cannot make is replaced by the earliest it can, and says so.
+                              const tooEarly = value < earliest;
+                              setDates({ ...dates, [inv.id]: tooEarly ? earliest : value });
+                              if (tooEarly) actions.toast(`${account.name} cannot pay before ${formatDate(earliest)}. Set to that date.`, "danger");
+                              else actions.toast("Payment date updated");
                             }}
-                            className="h-7 rounded-[4px] border border-line px-1.5 text-[11.5px] text-ink"
                           />
-                        </label>
+                        </div>
                         <button type="button" onClick={() => remove(inv.id)} className="ml-auto text-muted underline underline-offset-2 hover:text-ink">
                           Remove from batch
                         </button>
@@ -244,6 +264,28 @@ export function ConfirmPage() {
                 </ul>
               </div>
             ))}
+
+            {leftOut.length > 0 && (
+              <div className="mt-7">
+                <h3 className="mb-1 flex items-center gap-2 text-[12px] font-medium">
+                  <Info size={13} /> Not included from this account
+                </h3>
+                <ul>
+                  {leftOut.map((inv) => (
+                    <li key={inv.id} className="flex items-center gap-3 border-b border-hairline py-2.5 text-[12.5px]">
+                      <div className="min-w-0 flex-1">
+                        <span>{inv.supplier}</span>
+                        <span className="text-muted"> · {reasonNot(inv)}</span>
+                      </div>
+                      <Money amount={inv.total} currency={inv.currency} />
+                      <button type="button" onClick={() => remove(inv.id)} className="text-[11.5px] text-muted underline underline-offset-2 hover:text-ink">
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -251,37 +293,48 @@ export function ConfirmPage() {
   );
 }
 
-function Initiated({ done, onReturn }: { done: Done; onReturn: () => void }) {
+function Initiated({ done, onReturn, onMore }: { done: Done; onReturn: () => void; onMore: () => void }) {
   const steps = [
-    done.settlementDays > 0
-      ? `Money is moved out of your ${done.accountName}. This takes up to ${done.settlementDays} working days.`
-      : `Money leaves your ${done.accountName} today.`,
-    "As soon as funds clear, each payment is sent on its date.",
-    "Each invoice shows Processing, then Paid, and is synced to your accounting system.",
-    "If a payment is rejected, the invoice shows Payment failed with a Retry.",
+    done.later > 0
+      ? `${done.later === done.count ? "Each payment" : `${done.later} of them`} waits as Scheduled until its date. The money stays in your ${done.accountName} until then, and you can cancel.`
+      : `The money leaves your ${done.accountName} now${done.settlementDays > 0 ? `, which takes up to ${done.settlementDays} working days` : ""}.`,
+    "On its date an invoice shows Processing, then Paid, and is synced to your accounting system.",
+    "If a payment is rejected, the invoice shows Payment failed, the money returns to the account, and you can retry.",
   ];
   return (
     <div className="grid min-h-screen place-items-center px-8">
-      <div className="w-full max-w-[460px] text-center">
+      <div className="w-full max-w-[480px] text-center">
         <div className="mx-auto grid size-12 place-items-center bg-ink text-white">
           <Check size={22} />
         </div>
         <h1 className="mt-5 text-[26px] font-light">
-          {done.count} {done.count === 1 ? "Payment" : "Payments"} Initiated
+          {done.count} {done.count === 1 ? "Payment" : "Payments"} Scheduled
         </h1>
         <p className="mt-2 text-[13px] text-muted">
-          You&apos;ve initiated payments of{" "}
-          {done.totals.map(([currency, amount], i) => (
-            <span key={currency}>
-              {i > 0 && " and "}
-              <Money amount={amount} currency={currency} />
-            </span>
-          ))}
-          .
+          Payments of <Money amount={done.total} currency={done.currency} /> from {done.accountName}.
         </p>
-        <Button variant="secondary" className="mt-5" onClick={onReturn}>
-          Return to Payments
-        </Button>
+
+        {done.refused.length > 0 && (
+          <div role="alert" className="mt-4 rounded-[6px] bg-danger-soft p-3 text-left text-[12.5px]">
+            <p className="font-medium">{done.refused.length === 1 ? "1 payment was not scheduled" : `${done.refused.length} payments were not scheduled`}</p>
+            <ul className="mt-1">
+              {done.refused.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-center gap-2">
+          <Button variant="secondary" onClick={onReturn}>
+            Return to Payments
+          </Button>
+          {done.left > 0 && (
+            <Button onClick={onMore}>
+              Pay the remaining {done.left}
+            </Button>
+          )}
+        </div>
 
         <h2 className="mt-10 text-[15px]">What happens next?</h2>
         <ol className="mt-4 flex flex-col gap-3 text-left text-[12.5px]">
@@ -292,9 +345,6 @@ function Initiated({ done, onReturn }: { done: Done; onReturn: () => void }) {
             </li>
           ))}
         </ol>
-        <p className="mt-6 flex items-start gap-2 text-left text-[11.5px] text-muted">
-          <Info size={13} className="mt-0.5 shrink-0" /> Internal checks may delay a payment.
-        </p>
       </div>
     </div>
   );

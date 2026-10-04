@@ -1,13 +1,15 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Money } from "@/components/ui/Money";
+import { Select } from "@/components/ui/Select";
 import type { ErpAdapter } from "@/lib/erp";
 import { lineGross, newLine, setGross, setNet, setTaxCode } from "@/lib/lines";
-import { linesTotal } from "@/lib/rules";
+import { linesTotal, TAX_TOLERANCE } from "@/lib/rules";
 import { track } from "@/lib/track";
 import type { Doc, LineItem } from "@/lib/types";
-import { inputBase, inputClass, MoneyInput, OriginBadge, UncertainNote } from "./fields";
+import { inputBase, MoneyInput, OriginBadge, UncertainNote } from "./fields";
 
 type Props = {
   doc: Doc;
@@ -17,7 +19,6 @@ type Props = {
   onFocus: (key: string | null) => void;
 };
 
-const selectClass = `${inputClass} appearance-none pr-6`;
 
 export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
   // Receipts are entered as the amount paid; invoices as quantity and unit price.
@@ -28,8 +29,7 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
   const patch = (id: string, fn: (line: LineItem) => LineItem) => onChange(doc.lines.map((l) => (l.id === id ? fn(l) : l)));
 
   const setCode = (line: LineItem, key: "glCode" | "taxCode", value: string | null) => {
-    const metaKey = key === "glCode" ? "glMeta" : "taxMeta";
-    const was = line[metaKey]?.origin;
+    const was = (key === "glCode" ? line.glMeta : line.taxMeta)?.origin;
     if (was === "memory" || was === "document") track("ai_suggestion_changed", { doc: doc.id, field: key, from: line[key], to: value });
     patch(line.id, (l) => (key === "taxCode" ? setTaxCode(l, value, erp, mode) : { ...l, glCode: value, glMeta: { origin: "user" } }));
   };
@@ -39,18 +39,12 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
     patch(line.id, (l) => ({ ...l, [metaKey]: { ...l[metaKey], uncertain: false } }));
   };
 
-  const add = () => {
-    const line = newLine(`${doc.id}-l${Date.now().toString(36)}`);
-    // Start a new line from the first one's codes: on a receipt the split is usually by tax rate.
-    onChange([...doc.lines, { ...line, glCode: doc.lines[0]?.glCode ?? null, glMeta: { origin: "user" } }]);
-  };
-
   return (
     <section aria-label="Line items">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-[15px]">Line items</h2>
         {!readOnly && !slip && (
-          <button type="button" onClick={add} className="flex items-center gap-1 text-[12px] text-ink-2 hover:text-ink">
+          <button type="button" onClick={() => onChange([...doc.lines, newLine(`${doc.id}-l${Date.now().toString(36)}`)])} className="flex items-center gap-1 text-[12px] text-ink-2 hover:text-ink">
             <Plus size={13} /> {doc.type === "receipt" && doc.lines.length === 1 ? "Itemise" : "Add line"}
           </button>
         )}
@@ -74,22 +68,13 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
                   aria-label={`Line ${n} description`}
                   value={line.description}
                   disabled={readOnly}
-                  placeholder="Description"
-                  onChange={(e) => patch(line.id, (l) => ({ ...l, description: e.target.value }))}
-                  className={`${inputBase} min-w-0 flex-1`}
+                  placeholder="Description (needed)"
+                  onChange={(e) => patch(line.id, (l) => ({ ...l, description: e.target.value, amountMeta: { origin: "user" } }))}
+                  className={`${inputBase} min-w-0 flex-1 ${line.description.trim() ? "" : "border-warn"}`}
                 />
                 {mode === "net" ? (
                   <>
-                    <input
-                      aria-label={`Line ${n} quantity`}
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={line.quantity}
-                      disabled={readOnly}
-                      onChange={(e) => patch(line.id, (l) => setNet(l, Number(e.target.value) || 0, l.unitAmount, erp))}
-                      className={`${inputBase} tabular w-16 text-right`}
-                    />
+                    <QuantityInput label={`Line ${n} quantity`} value={line.quantity} disabled={readOnly} onCommit={(q) => patch(line.id, (l) => setNet(l, q, l.unitAmount, erp))} />
                     <span className="pt-1.5 text-muted">×</span>
                     <div className="w-24">
                       <MoneyInput label={`Line ${n} unit price`} value={line.unitAmount} disabled={readOnly} onCommit={(v) => patch(line.id, (l) => setNet(l, l.quantity, v, erp))} />
@@ -131,28 +116,29 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
                   meta={line.taxMeta}
                 />
                 {erp.extraLineFields.map((field) => (
-                  <label key={field.key} className="flex items-center gap-2 text-[12px] text-muted">
-                    <span className="w-9 shrink-0">{field.label.slice(0, 4)}.</span>
-                    <select
-                      aria-label={`Line ${n} ${field.label}`}
+                  <div key={field.key} className="col-span-2 flex items-center gap-2 text-[12px] text-muted">
+                    <span className="w-20 shrink-0">{field.label}</span>
+                    <Select
+                      variant="field"
+                      label={`Line ${n} ${field.label}`}
                       disabled={readOnly}
+                      attention={!line.extra?.[field.key]}
                       value={line.extra?.[field.key] ?? ""}
-                      onChange={(e) => patch(line.id, (l) => ({ ...l, extra: { ...l.extra, [field.key]: e.target.value } }))}
-                      className={`${selectClass} ${line.extra?.[field.key] ? "" : "border-warn"}`}
-                    >
-                      <option value="">Choose {field.label.toLowerCase()}</option>
-                      {field.options.map((o) => (
-                        <option key={o}>{o}</option>
-                      ))}
-                    </select>
-                  </label>
+                      options={[{ value: "", label: `Choose ${field.label.toLowerCase()}` }, ...field.options.map((o) => ({ value: o, label: o }))]}
+                      onChange={(v) => patch(line.id, (l) => ({ ...l, extra: { ...l.extra, [field.key]: v } }))}
+                    />
+                  </div>
                 ))}
               </div>
 
               <UncertainNote meta={line.glMeta} onConfirm={readOnly ? undefined : () => confirm(line, "glMeta")} />
               <UncertainNote meta={line.taxMeta} onConfirm={readOnly ? undefined : () => confirm(line, "taxMeta")} />
 
-              <div className="mt-2 flex justify-end gap-4 text-[11.5px] text-muted">
+              <div className="mt-2 flex items-center justify-end gap-4 text-[11.5px] text-muted">
+                {/* Where the description and amounts on this line came from. */}
+                <span className="mr-auto">
+                  <OriginBadge meta={line.amountMeta} align="left" />
+                </span>
                 {line.tax !== 0 && (
                   <span>
                     of which tax <Money amount={line.tax} currency={doc.currency} />
@@ -169,7 +155,7 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
                 </button>
               )}
               {/* Suppliers round VAT per line or per invoice, so a penny or two can differ. Anything larger is a real mismatch and is left for a person. */}
-              {!readOnly && mode === "net" && remaining !== 0 && Math.abs(remaining) <= 5 && (
+              {!readOnly && mode === "net" && remaining !== 0 && Math.abs(remaining) <= TAX_TOLERANCE && (
                 <button type="button" onClick={() => patch(line.id, (l) => ({ ...l, tax: l.tax + remaining }))} className="mt-1 block w-full text-right text-[11.5px] underline underline-offset-2">
                   Rounding: adjust this line&apos;s tax by the difference
                 </button>
@@ -179,6 +165,36 @@ export function Lines({ doc, erp, readOnly, onChange, onFocus }: Props) {
         })}
       </ul>
     </section>
+  );
+}
+
+// Typed as text and only applied when it is a number above zero, so the field can be
+// cleared while typing and can never hold a negative quantity.
+function QuantityInput({ label, value, disabled, onCommit }: { label: string; value: number; disabled: boolean; onCommit: (quantity: number) => void }) {
+  const [text, setText] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  return (
+    <input
+      aria-label={label}
+      aria-invalid={invalid}
+      inputMode="decimal"
+      disabled={disabled}
+      value={text ?? String(value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        if (text === null) return;
+        const parsed = /^\d+(\.\d+)?$/.test(text.trim()) ? Number(text) : NaN;
+        if (!(parsed > 0)) {
+          setInvalid(true);
+          return;
+        }
+        setInvalid(false);
+        setText(null);
+        if (parsed !== value) onCommit(parsed);
+      }}
+      className={`${inputBase} tabular w-16 text-right ${invalid ? "border-danger" : ""}`}
+    />
   );
 }
 
@@ -199,22 +215,20 @@ function CodeSelect({ label, ariaLabel, value, known, erpName, readOnly, options
     <div>
       <div className="flex items-center gap-2 text-[12px] text-muted">
         <span className="w-9 shrink-0">{label}</span>
-        <select
-          aria-label={ariaLabel}
+        <Select
+          variant="field"
+          label={ariaLabel}
           disabled={readOnly}
+          attention={!value || !known}
           value={value ?? ""}
-          onChange={(e) => onChange(e.target.value || null)}
-          className={`${selectClass} ${!value || !known ? "border-warn" : ""}`}
-        >
-          <option value="">Choose a code</option>
-          {/* A code chosen earlier that the ERP no longer has. */}
-          {value && !known && <option value={value}>{value} (not in {erpName})</option>}
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.text}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "", label: "Choose a code" },
+            // A code chosen earlier that the ERP no longer has.
+            ...(value && !known ? [{ value, label: `${value} (not in ${erpName})` }] : []),
+            ...options.map((o) => ({ value: o.value, label: o.text })),
+          ]}
+          onChange={(v) => onChange(v || null)}
+        />
       </div>
       <div className="mt-1 pl-11">
         <OriginBadge meta={meta} align="left" />

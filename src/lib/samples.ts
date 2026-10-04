@@ -1,4 +1,4 @@
-import { addDays } from "./dates";
+import { addDays, nowStamp } from "./dates";
 import { printFrom } from "./printed";
 import { detectType, type TypeSignals } from "./rules";
 import { CURRENT_USER, ENTITY } from "./seed";
@@ -9,16 +9,20 @@ import type { Doc, FieldMeta, Invoice, LineItem, Printed, Receipt } from "./type
 // production the result comes from the extraction service.
 
 const DOC: FieldMeta = { origin: "document" };
+const MISSING: FieldMeta = { origin: "missing" };
 const memory = (reason: string): FieldMeta => ({ origin: "memory", reason });
 const noVat: FieldMeta = { origin: "document", reason: "No VAT shown on the document." };
 
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
-const ACCEPTED = ["application/pdf", "image/png", "image/jpeg", "image/heic", "image/webp"];
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/heic", "image/webp"];
+const ACCEPTED_EXTENSIONS = /\.(pdf|png|jpe?g|heic|webp)$/i;
 
-// Checks that do not need the file to be read. These are real, not mocked.
-export function rejectFile(file: { size: number; type: string }): string | null {
+// Checks that do not need the file to be read. These are real, not mocked. A file with no
+// reported type is judged by its extension rather than waved through.
+export function rejectFile(file: { name: string; size: number; type: string }): string | null {
   if (file.size > MAX_FILE_BYTES) return "Over 2MB. Reduce the file size and try again.";
-  if (file.type && !ACCEPTED.includes(file.type)) return "This file type is not supported. Use a PDF or an image.";
+  const accepted = file.type ? ACCEPTED_TYPES.includes(file.type) : ACCEPTED_EXTENSIONS.test(file.name);
+  if (!accepted) return "This file type is not supported. Use a PDF or an image.";
   return null;
 }
 
@@ -39,20 +43,25 @@ const line = (id: string, description: string, quantity: number, unitAmount: num
   tax,
   glCode,
   taxCode,
+  amountMeta: DOC,
   glMeta: DOC,
   taxMeta: DOC,
   ...over,
 });
 
-const base = (ctx: Ctx) => ({
-  id: ctx.id,
-  fileName: ctx.fileName,
-  source: { channel: "upload" as const, by: CURRENT_USER, at: new Date().toISOString().slice(0, 19) },
-  entity: ENTITY,
-  currency: "GBP" as const,
-  extraction: "in_progress" as const,
-  sync: "not_synced" as const,
-});
+const base = (ctx: Ctx) => {
+  const at = nowStamp();
+  return {
+    id: ctx.id,
+    fileName: ctx.fileName,
+    source: { channel: "upload" as const, by: CURRENT_USER, at },
+    updatedAt: at,
+    entity: ENTITY,
+    currency: "GBP" as const,
+    extraction: "in_progress" as const,
+    sync: "not_synced" as const,
+  };
+};
 
 function finish<T extends Doc>(doc: T, signals: TypeSignals, reason?: string, paper?: Partial<Printed>): T {
   const detected = detectType(signals);
@@ -82,7 +91,7 @@ const fieldwork = (ctx: Ctx): Invoice => {
           glMeta: memory("Coded to 412 — Consulting & Accounting on the last 2 invoices from this supplier."),
         }),
       ],
-      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, bank: DOC },
+      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, currency: DOC, bank: DOC },
       typeReason: "",
     },
     { title: "Invoice", hasBankDetails: true, hasDueDate: true },
@@ -104,7 +113,7 @@ const notion = (ctx: Ctx): Receipt =>
           taxMeta: noVat,
         }),
       ],
-      meta: { merchant: DOC, paidOn: DOC, total: DOC },
+      meta: { merchant: DOC, paidOn: DOC, total: DOC, currency: DOC },
       typeReason: "",
     },
     { title: "Invoice", paidMarker: "Paid", cardLast4: "4242" },
@@ -126,7 +135,7 @@ const gails = (ctx: Ctx): Receipt =>
           glMeta: memory("Coded to 420 — Entertainment on the last 6 receipts from cafés."),
         }),
       ],
-      meta: { merchant: DOC, paidOn: DOC, total: DOC },
+      meta: { merchant: DOC, paidOn: DOC, total: DOC, currency: DOC },
       typeReason: "",
     },
     { cardLast4: "4242" },
@@ -150,24 +159,24 @@ const talentbridgeAgain = (ctx: Ctx): Invoice =>
       documentBank: { accountName: "Talent Bridge", sortCode: "23-05-80", accountNumber: "18364027" },
       total: 1477488,
       lines: [line(`${ctx.id}-1`, "Recruitment fee — senior engineer", 1, 1231240, 246248, "412", "INPUT2")],
-      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, bank: DOC },
+      meta: { supplier: DOC, number: DOC, issuedOn: DOC, dueOn: DOC, total: DOC, currency: DOC, bank: DOC },
       typeReason: "",
     },
     { title: "Invoice", hasBankDetails: true, hasDueDate: true },
   );
 
-// Nothing could be read. The record is blank and waits for a retry or manual entry.
-const unreadable = (ctx: Ctx): Receipt => ({
+// What a file becomes before anything has been read from it. If reading fails, this is
+// the record that waits for manual entry.
+export const blank = (ctx: Ctx): Receipt => ({
   ...base(ctx),
   type: "receipt",
   status: "draft",
   merchant: "",
   paidOn: "",
   total: 0,
-  lines: [line(`${ctx.id}-1`, "", 1, 0, 0, null, null, { glMeta: { origin: "missing" }, taxMeta: { origin: "missing" } })],
-  meta: { merchant: { origin: "missing" }, paidOn: { origin: "missing" }, total: { origin: "missing" } },
+  lines: [line(`${ctx.id}-1`, "", 1, 0, 0, null, null, { amountMeta: MISSING, glMeta: MISSING, taxMeta: MISSING })],
+  meta: { merchant: MISSING, paidOn: MISSING, total: MISSING, currency: MISSING },
   typeReason: "Could not be read, so the type is a guess",
-  mock: { unreadable: true },
 });
 
 // The prepared batch behind "Add sample files".
@@ -176,11 +185,9 @@ export const sampleBatch: Sample[] = [
   { fileName: "notion-invoice-october.pdf", build: notion },
   { fileName: "IMG_5521.jpg", build: gails },
   { fileName: "talentbridge-TB-2026-0150.pdf", build: talentbridgeAgain },
-  { fileName: "scan-0042.jpg", build: unreadable },
+  { fileName: "scan-0042.jpg", build: blank },
   { fileName: "q3-bank-statement.pdf", notADocument: "Not an invoice or a receipt. It looks like a bank statement." },
 ];
 
 // Results handed to real files the user drops, in turn.
 export const rotation = [fieldwork, notion, gails];
-
-export const UNREADABLE_REASON = "Could not read this file. The photo is too blurred.";
