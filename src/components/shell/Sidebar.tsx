@@ -120,7 +120,7 @@ export function Sidebar() {
         <Static item={{ label: "Help Center", icon: CircleHelp }} />
         <Static item={{ label: "Add Company", icon: Plus }} />
         <div className="flex h-8 items-center gap-2.5 px-2 text-[12px]">
-          <span className="grid size-4 place-items-center rounded-full bg-accent text-[9px] text-white">N</span>
+          <span aria-hidden className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-medium leading-none text-white">N</span>
           <span className="truncate" title={ENTITY}>
             Demo Account
           </span>

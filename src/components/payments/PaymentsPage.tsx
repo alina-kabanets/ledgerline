@@ -10,7 +10,6 @@ import { isClosed, needsAction, partyOf, rowStatus, type StatusKey } from "@/lib
 import { useStore, type Tab } from "@/lib/store";
 import type { Currency, Doc } from "@/lib/types";
 import { DocTable, sortRows, type Row, type Sort, type SortKey } from "./DocTable";
-import { ForwardCard } from "./ForwardCard";
 import { Hero } from "./Hero";
 import { SelectionBar } from "./SelectionBar";
 
@@ -141,7 +140,6 @@ export function PaymentsPage() {
 
       <div className="mt-6 flex items-start justify-between gap-8">
         <Hero tab={tab} docs={counted} hydrated={state.hydrated} />
-        <ForwardCard />
       </div>
 
       {scheduled.length > 0 && (

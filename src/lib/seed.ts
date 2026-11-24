@@ -8,8 +8,6 @@ import type { Account, BankDetails, Channel, Contact, Doc, FieldMeta, Invoice, L
 // Dates are relative to today so "overdue" and "due tomorrow" stay true.
 
 export const ENTITY = "Northwind Studio Ltd";
-export const INBOX_EMAIL = "northwind@inbox.ledgerline.app";
-export const INBOX_WHATSAPP = "+1 555 830 5393";
 export const CURRENT_USER = "Alina Kabanets";
 
 const DOC: FieldMeta = { origin: "document" };
