@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerline · Design process</title>
+<style>
+  :root {
+    --accent: #3d5afe;
+    --accent-10: #f3f5ff;
+    --ink: #10110d;
+    --ink-2: #45473e;
+    --muted: #686a60;
+    --faint: #bdbeba;
+    --line: #e0e1df;
+    --surface: #f9f9f9;
+    --orange: #ff870f;
+    --orange-10: #fef5e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ink);
+    overflow: hidden;
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: absolute; left: 50%; top: 50%; width: 1440px; height: 810px; background: #fff; overflow: hidden; }
+  .slide { position: absolute; inset: 0; padding: 48px 64px 62px; display: none; flex-direction: column; }
+  .slide.active { display: flex; }
+
+  .kicker { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+  h2 { font-size: 34px; font-weight: 400; letter-spacing: -.01em; line-height: 1.12; margin: 4px 0 0; }
+  .lede { color: var(--ink-2); margin: 8px 0 0; max-width: 900px; }
+  .body { flex: 1; min-height: 0; margin-top: 24px; display: flex; flex-direction: column; }
+  h3 { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  li { display: flex; gap: 9px; align-items: flex-start; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .chip { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+  .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--ink); color: #fff; letter-spacing: .02em; vertical-align: middle; }
+  .tag.soft { background: var(--surface); color: var(--muted); }
+  .assume { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 500; }
+
+  .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); border: 1px solid var(--ink); flex: none; margin-top: 6px; }
+  .dot.hyp { background: #fff; border-color: var(--faint); }
+  .legend { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+  .legend span { display: flex; align-items: center; gap: 8px; }
+  .legend .dot { margin-top: 0; }
+
+  /* chrome */
+  #bar { position: absolute; left: 64px; right: 64px; bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+  #bar .nav { display: flex; align-items: center; gap: 12px; }
+  #bar button { appearance: none; border: 1px solid var(--line); background: #fff; border-radius: 4px; width: 26px; height: 22px; cursor: pointer; font: inherit; color: var(--ink); line-height: 1; }
+  #bar button:hover { border-color: var(--ink); }
+  #bar button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #progress { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--ink); transition: width .15s cubic-bezier(.4,0,.2,1); }
+
+  /* title */
+  .title { justify-content: center; }
+  .title .ring { position: absolute; right: -120px; top: 50%; width: 620px; height: 620px; margin-top: -310px; border-radius: 50%; background: var(--accent); }
+  .title .ring::after { content: ""; position: absolute; inset: 150px; border-radius: 50%; background: #fff; }
+  .title h1 { font-size: 76px; font-weight: 400; letter-spacing: -.02em; line-height: 1; margin: 14px 0 18px; max-width: 760px; position: relative; }
+  .title p { margin: 0; font-size: 19px; color: var(--ink-2); max-width: 620px; position: relative; }
+  .title .by { margin-top: 44px; font-size: 14px; color: var(--muted); }
+  .title ol { position: relative; margin: 28px 0 0; padding: 0; list-style: none; display: flex; gap: 8px; flex-wrap: wrap; max-width: 700px; }
+
+  /* generic grids */
+  .cols { display: grid; gap: 16px; }
+  .cols.c4 { grid-template-columns: repeat(4, 1fr); }
+  .cols.c3 { grid-template-columns: repeat(3, 1fr); }
+  .cols.c2 { grid-template-columns: repeat(2, 1fr); }
+  .card h4 { font-size: 21px; font-weight: 500; margin: 0 0 4px; }
+  .card .sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  .card li { font-size: 16px; }
+  .card ul { gap: 9px; }
+  .card li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex: none; margin-top: 8px; }
+  .card li.plain::before { display: none; }
+  .num { font-size: 12px; color: var(--muted); }
+  q { font-style: italic; quotes: "“" "”"; }
+
+  /* domain */
+  .flow { display: flex; align-items: center; gap: 10px; margin: 2px 0 18px; flex-wrap: wrap; }
+  .state { border: 1px solid var(--ink); border-radius: 999px; padding: 6px 16px; font-size: 15px; }
+  .state.end { background: var(--ink); color: #fff; }
+  .arrow { color: var(--muted); }
+  .shared { margin-top: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+
+  /* audience */
+  .plans { margin-top: 16px; display: grid; grid-template-columns: 150px repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .plans > div { padding: 12px 18px; border-left: 1px solid var(--line); }
+  .plans > div:first-child { border-left: 0; background: var(--surface); display: flex; align-items: center; }
+  .plans b { font-weight: 500; font-size: 22px; }
+  .plans small { display: block; color: var(--muted); font-size: 12px; }
+
+  /* personas overview */
+  .pcards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .pcards .card { padding: 16px; display: flex; flex-direction: column; }
+  .pcards h4 { font-size: 19px; margin: 10px 0 8px; }
+  .pcards p { margin: 0 0 18px; font-size: 14.5px; color: var(--ink-2); }
+  .pcards .why { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+  .pcards .why li { font-size: 14px; }
+  .note { margin-top: 18px; display: flex; gap: 14px; align-items: center; font-size: 13px; color: var(--ink-2); }
+  .note + .note { margin-top: 10px; }
+  .note .assume { flex: none; min-width: 92px; justify-content: center; }
+  .assume.decide { background: var(--ink); color: #fff; }
+  .note.big { font-size: 15px; color: var(--ink); }
+
+  /* receipts */
+  .rc .card h4 { margin-bottom: 14px; }
+  .rc .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .rc .chips .chip { font-size: 14.5px; padding: 5px 11px; color: var(--ink); }
+  .cols.rc2 { grid-template-columns: 1fr 1.5fr; }
+  .rc dl.two { grid-template-columns: 1fr 1fr; gap: 14px 28px; }
+
+  .tabsq .card li { font-size: 15px; }
+  .tabsq .fits { margin-top: 12px; }
+  .tabsq .fits > div { padding: 11px 18px; font-size: 14.5px; }
+  .tabsq .note { margin-top: 14px; }
+
+  .cols.ideas4 { grid-template-columns: 1.5fr 1fr 1.2fr 1fr; }
+  .ideas .card h4 { margin-bottom: 14px; }
+  .ideas dl { gap: 13px; }
+
+  /* AI ideas */
+  .itable { display: grid; grid-template-columns: 196px 230px 1fr 236px 216px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12.5px; line-height: 1.35; }
+  .itable > div { padding: 8px 12px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .itable > div:nth-child(5n+1) { border-left: 0; }
+  .itable > .hd { border-top: 0; background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .itable > .name { font-weight: 500; font-size: 13px; }
+
+  /* what I built, metrics */
+  .cols.c5 { grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .built .card { padding: 16px; }
+  .built .card h4 { font-size: 18px; margin: 8px 0 8px; }
+  .built .card p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .built .states { margin-top: 22px; display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
+  .built .states .flow { margin: 0; }
+  .built .state { font-size: 18px; padding: 8px 20px; }
+  .metrics .card { padding: 16px 20px; }
+  .metrics .card h4 { font-size: 19px; margin: 6px 0 8px; }
+  .metrics .card p { margin: 0; font-size: 14.5px; color: var(--ink); }
+  .metrics .card p.why { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .metrics .fits > div { font-size: 13px; }
+
+  .edges .card { padding: 14px 16px 12px; }
+  .edges .card h4 { font-size: 21px; font-weight: 500; margin: 0 0 12px; padding-bottom: 9px; border-bottom: 1px solid var(--ink); }
+  .edges dl { gap: 6px; }
+  .edges dt { font-size: 12.5px; font-weight: 500; }
+  .edges dd { font-size: 12px; margin-top: 0; }
+
+  /* photos and screenshots */
+  .shots { display: grid; gap: 16px; }
+  .shots.s3 { grid-template-columns: repeat(3, 1fr); }
+  .shot { margin: 0; }
+  .shot img { display: block; width: 100%; height: 400px; object-fit: contain; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  .shot figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+
+  .trace { display: grid; grid-template-columns: 84px 112px 1fr 1.35fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12.5px; line-height: 1.3; }
+  .trace > div { padding: 6px 12px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .trace > div:nth-child(4n+1) { border-left: 0; }
+  .trace > .hd { border-top: 0; background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .trace > .grp { font-weight: 500; font-size: 13px; }
+  .trace > .grp:empty { border-top-color: transparent; }
+  .trace > .stage { color: var(--muted); }
+
+  .rgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .risks .card { padding: 14px 16px; }
+  .risks .card h4 { font-size: 16px; margin: 0 0 8px; line-height: 1.2; }
+  .risks .card p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+
+  /* double diamond */
+  .diamonds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+  .phase .shape { height: 190px; display: grid; place-items: center; align-content: center; gap: 4px; background: #e9ecf8; }
+  .phase.div .shape { clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+  .phase.conv .shape { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .phase .shape span { font-size: 22px; font-weight: 500; }
+  .phase .shape small { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .phase.div .shape { padding-left: 30%; }
+  .phase.conv .shape { padding-right: 30%; }
+  .phase ul { margin-top: 18px; padding: 0 18px; }
+  .phase li { font-size: 14px; }
+  .phase li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex: none; margin-top: 8px; }
+  .ddlabels { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; font-size: 12px; color: var(--muted); text-align: center; border-top: 1px solid var(--line); padding-top: 8px; }
+
+  /* finance lead */
+  .titles .card h4 { font-size: 22px; margin-bottom: 10px; }
+  .titles .card p { margin: 0; font-size: 15px; color: var(--ink-2); }
+  .titles .card .co { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .cadence .card li { font-size: 15.5px; }
+  .cadence .card li.hit::before { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); border: 1px solid var(--ink); margin-top: 6px; }
+  .cadence .card li:not(.hit)::before { width: 8px; height: 8px; border-radius: 2px; background: #fff; border: 1px solid var(--faint); margin-top: 6px; }
+  .fits { margin-top: 16px; display: grid; grid-template-columns: 150px 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .fits > div { padding: 14px 18px; font-size: 15px; }
+  .fits > div:first-child { background: var(--surface); display: flex; align-items: center; }
+  .src-note { margin-top: 12px; font-size: 12.5px; color: var(--muted); display: flex; gap: 18px; align-items: center; }
+  .src-note span { display: inline-flex; align-items: center; gap: 7px; }
+  .src-note .dot { margin-top: 0; }
+
+  /* empathy map */
+  .em { display: grid; grid-template-columns: 290px 1fr; gap: 40px; flex: 1; min-height: 0; }
+  .em .who { display: flex; flex-direction: column; }
+  .em .who h2 { font-size: 40px; margin: 6px 0 12px; }
+  .em .who p { margin: 0 0 16px; color: var(--ink-2); }
+  .em .facts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .em .legend { margin-top: auto; }
+  .em .maps { display: flex; flex-direction: column; gap: 14px; min-height: 0; font-size: 16px; }
+  .quad { position: relative; flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .q { padding: 18px 22px; }
+  .q:nth-child(1), .q:nth-child(2) { border-bottom: 1px solid var(--line); }
+  .q:nth-child(1), .q:nth-child(3) { border-right: 1px solid var(--line); padding-right: 44px; }
+  .q:nth-child(2), .q:nth-child(4) { padding-left: 44px; }
+  .q:nth-child(3), .q:nth-child(4) { padding-top: 30px; }
+  .says li span:last-child { font-style: italic; }
+  .feels ul { display: flex; flex-wrap: wrap; gap: 6px; }
+  .feels li { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+  .feels li .dot { display: none; }
+  .core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 84px; height: 84px; border-radius: 50%; background: var(--accent); color: #fff; border: 1px solid var(--ink); display: grid; place-items: center; text-align: center; font-size: 11.5px; font-weight: 500; line-height: 1.15; padding: 10px; }
+  .pg { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pg .card { padding: 16px 22px; }
+  .pains { background: var(--orange-10); border-color: #f6dfc2; }
+  .pains h3 { color: #a3540a; }
+  .pains .dot.hyp { background: var(--orange); border-color: var(--orange); }
+  .gains { background: var(--accent-10); border-color: #d6ddff; }
+  .gains h3 { color: #1f2f8f; }
+  .em li::before { display: none; }
+
+  /* journey */
+  .jm { display: grid; grid-template-columns: 112px repeat(var(--n), 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 17px; line-height: 1.35; }
+  .jm:not(.dense) > div { padding: 14px 16px; }
+  .jm.dense { font-size: 13.5px; }
+  .jm > div { padding: 10px 12px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+  .jm > .lab { border-left: 0; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--surface); }
+  .jm > .r0 { border-top: 0; }
+  .jm > .stage { font-weight: 500; font-size: 15px; display: flex; gap: 7px; align-items: baseline; }
+  .jm > .stage i { font-style: normal; font-weight: 400; color: var(--muted); font-size: 11px; }
+  .jm > .lab.stage { font-size: 10.5px; font-weight: 400; }
+  .jm > .think { font-style: italic; color: var(--ink-2); }
+  .jm > .mood { grid-column: 2 / -1; padding: 0; position: relative; height: 58px; }
+  .mood svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .mood b { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; border: 1px solid var(--ink); background: #fff; }
+  .mood b.up { background: var(--accent); }
+  .mood b.down { background: var(--orange); border-color: var(--orange); }
+  .jm > .should { background: var(--ink); color: #fff; border-left-color: #2c2e27; }
+  .jm > .lab.should { color: #a9b8ff; }
+  .jm > .lab.should small { display: block; text-transform: none; letter-spacing: 0; color: var(--faint); margin-top: 4px; }
+  .jnote { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+
+  /* competitors, AI, assumptions */
+  .comp .card { display: flex; flex-direction: column; }
+  .comp dl { margin: 0; display: grid; gap: 10px; }
+  .comp dt { font-weight: 500; font-size: 16px; }
+  .comp dd { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
+  .ai { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .ai .card { padding: 12px 14px; }
+  .ai h4 { font-size: 14.5px; margin: 0 0 3px; }
+  .ai p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+  .ai .src { margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .stance { margin-top: 12px; display: flex; gap: 22px; font-size: 13px; color: var(--ink-2); }
+  .as { display: grid; grid-template-columns: 44px 1fr 1.15fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .as > div { padding: 16px 18px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .as > div:nth-child(4n+1) { border-left: 0; color: var(--muted); }
+  .as > .hd { border-top: 0; background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 10px 18px; }
+  .as > .a { background: var(--accent-10); }
+  .as { font-size: 18px; }
+  .as > div { padding: 22px 22px; }
+  .domain .card { padding: 28px 30px; }
+  .domain .card li { font-size: 19px; }
+  .domain .card .sub { font-size: 17px; }
+  .domain .state { font-size: 19px; padding: 8px 20px; }
+  .domain .flow { margin: 6px 0 24px; }
+  .domain .shared { font-size: 15px; margin-top: 22px; }
+  .domain .chip { font-size: 14px; padding: 4px 10px; }
+
+  @media print {
+    @page { size: 1440px 810px; margin: 0; }
+    body { background: #fff; overflow: visible; }
+    #stage { position: static; transform: none !important; height: auto; overflow: visible; }
+    .slide { position: relative; display: flex; height: 810px; break-after: page; }
+    #bar, #progress { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="slides"></div>
+  <div id="bar">
+    <span id="where"></span>
+    <span class="nav"><button id="prev" aria-label="Previous slide">←</button><span id="count"></span><button id="next" aria-label="Next slide">→</button></span>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<script>
+// ---------- helpers ----------
+const el = (tag, cls, ...kids) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  kids.flat(Infinity).forEach((k) => k != null && n.append(k));
+  return n;
+};
+const slides = [];
+const slide = (section, cls, ...kids) => {
+  const s = el("section", "slide " + (cls || ""), kids);
+  s.dataset.section = section;
+  slides.push(s);
+  return s;
+};
+const head = (kicker, title, lede) => [
+  el("div", "kicker", kicker),
+  el("h2", "", title),
+  lede ? el("p", "lede", lede) : null,
+];
+// Items starting with "~" come from public material; the rest are hypotheses.
+const marked = (s, quote) => {
+  const fact = s.startsWith("~");
+  const text = fact ? s.slice(1) : s;
+  return el("li", "", el("i", fact ? "dot" : "dot hyp"), el("span", "", quote ? "“" + text + "”" : text));
+};
+const mlist = (items, quote) => el("ul", "", items.map((s) => marked(s, quote)));
+const plist = (items) => el("ul", "", items.map((s) => el("li", "", el("span", "", s))));
+
+// ---------- data ----------
+const PERSONAS = [
+  {
+    id: "finance", name: "Finance lead", tier: "Primary", core: "Finance lead",
+    role: "Head of Finance, Finance Director, Controller or Founding Operator on a team of one to three. Owns invoices end to end and reviews everyone else's receipts.",
+    facts: ["50–300 documents a month", "In the platform daily", "Xero or NetSuite", "1–2 pay runs a week"],
+    why: ["AP product pages across the market are written for finance directors, controllers and AP managers", "Owns the money going out", "Touches both document types and every state"],
+    says: ["Has this one been paid already?", "Who approved this?", "I need the receipt for that card charge.", "Can we pay it Friday with the rest?"],
+    thinks: ["Is this the same bank account as last time?", "If the AI coded it wrong, I find out at month end, when it is expensive to fix.", "I do not want to pull money out of the fund earlier than I have to."],
+    does: ["Batches work into one or two pay runs a week", "Checks supplier, amount and bank details by eye", "Tracks what is outstanding in a spreadsheet or Slack thread", "Chases colleagues for receipts in the last week of the month"],
+    feels: ["Responsible", "Interrupted", "Wary of automation they cannot inspect", "Relieved when the list is empty"],
+    pains: ["Re-keying data from PDFs", "Switching between inbox, bank portal and Xero", "~Money market withdrawals take 1–2 business days to settle", "~Receipts are filed among paid invoices today", "Fear of paying a duplicate or a fraudster"],
+    gains: ["A list that shows only what needs them", "Paying a whole batch in one go", "Books already right when the accountant looks", "~Hours back: 4+ a month; weekly reconciliation from 1 hour to 15 minutes"],
+    journeys: [
+      { title: "An invoice, from arrival to paid", stages: [
+        ["Intake", "Forwards supplier emails, or drags in a batch of PDFs", "“Just take them all.” Impatient", 0, "One bad file blocks the batch. Unclear whether it worked", "Per-file progress. Failures listed with a reason and a retry; the rest carry on"],
+        ["Triage", "Scans the list for what needs attention", "“What do I have to look at?”", -1, "Everything looks equally urgent", "Group by what is needed, with a count on each"],
+        ["Review", "Opens one, compares fields with the document", "“Can I trust this?” Sceptical", -1, "Re-reads the whole PDF to check five fields", "Document and fields side by side. Flag only uncertain fields. Show where each value came from"],
+        ["Code", "Sets GL and tax code per line", "“Same as last month, surely.” Bored", 0, "Long code list. Same choice repeated for the same supplier", "Suggest from supplier history and say so. Apply to all lines"],
+        ["Check payee", "Looks at who gets paid and where", "“Is this the real account?” Anxious", -1, "Bank detail changes are easy to miss", "Compare with the saved contact. A change blocks payment until confirmed"],
+        ["Ready to pay", "Marks it ready, or it becomes ready once valid", "“Done with this one.”", 0, "Not clear what is still missing", "Short checklist of what blocks readiness"],
+        ["Fund and pay", "Selects several, confirms account and date", "“Will the money be there in time?” Careful", -1, "Settlement lag. Low balance. Fear of double paying", "Balance against total. Warn if due date beats settlement. Pay is safe against double clicks"],
+        ["After", "Checks it went out and reached the ERP", "“Is it in Xero?”", 1, "Paid, but the sync failed silently", "Sync state per document, with a retry"],
+      ]},
+      { title: "Reviewing receipts at month end", stages: [
+        ["Collect", "Looks for what came in from the team", "“Who has not sent theirs?” Irritated", -1, "Receipts buried under paid invoices", "Receipts as their own view, with who sent each one and by which channel"],
+        ["Check", "Skims merchant, amount, coding", "“Fine, fine, fine, what is this?”", 0, "Opening each one to check a single field", "Enough in the row to approve without opening. Flags for the odd ones"],
+        ["Fix", "Recodes, or itemises a mixed receipt", "“This one has two VAT rates.”", -1, "Splitting a total by hand; totals drift", "Itemise option that keeps lines summing to the total"],
+        ["Close", "Submits the lot", "Relief", 1, "No bulk action", "Select many, submit together"],
+      ]},
+    ],
+  },
+  {
+    id: "employee", name: "Employee who sends receipts", tier: "Contributor", core: "Employee",
+    role: "Anyone in the company who paid for something and sends the proof in. Not assumed to have a login.",
+    facts: ["A few receipts a month", "No login assumed", "Email or WhatsApp", "On a phone"],
+    why: ["Receipts start with whoever paid, not with finance", "Forwarding by email or WhatsApp needs no login", "Platforms price per seat, so most staff will not have one"],
+    says: ["Where do I send this?", "I sent it last week.", "What is a GL code?"],
+    thinks: ["This is not my job.", "Did it go through?", "Will finance come back to me about this in three weeks?"],
+    does: ["Photographs the receipt at the table, often badly lit or crumpled", "Sends several at once on the last day", "Forwards email receipts without reading them"],
+    feels: ["Mildly annoyed", "Guilty when chased", "Wants to be done in ten seconds"],
+    pains: ["Questions about codes they do not understand", "No confirmation that it arrived", "Being asked again for something already sent", "Sending the same receipt twice by two channels"],
+    gains: ["Send, get a tick, forget", "Never hear about it again"],
+    journeys: [
+      { title: "A receipt, from purchase to handed over", note: "The sender is assumed not to log in. Finance moves the receipt from Draft to Submitted.", stages: [
+        ["Pay", "Buys something on a company or personal card", "Not thinking about admin", 0, "None yet", "Nothing"],
+        ["Capture", "Takes a photo or forwards an email", "“Quick, before I forget.”", 0, "Blurry, cropped, or a card slip instead of the receipt", "Accept photos. If unreadable, say so at once and ask for another"],
+        ["Send", "WhatsApp or email", "“Done?”", -1, "No idea whether it arrived", "Acknowledge on the same channel (mocked)"],
+        ["Handed over", "Nothing more. The receipt is now a draft in finance's list", "“Out of my hands.” Relief", 1, "Cannot see what happened to it", "Draft shows who sent it and by which channel, so finance knows whom to ask"],
+        ["Finance review", "Not involved. Finance checks it, fills gaps and submits", "Not thinking about it", 0, "Some detail only the sender knows, such as what it was for", "Finance can complete and submit without the sender. Asking them is the exception"],
+        ["Later", "Maybe gets a question from finance", "“I already did this.” Irritated", -1, "Same receipt sent twice from two channels", "Duplicate caught on arrival, not weeks later"],
+      ]},
+    ],
+  },
+  {
+    id: "approver", name: "Founder as approver", tier: "Secondary", core: "Approver",
+    role: "Founder or CEO at a small company with no finance hire. Signs off what goes out.",
+    facts: ["Under 25 invoices a month", "Opens the app from a notification", "Often on a phone"],
+    why: ["Small companies often have no finance hire", "Someone still signs off what goes out", "Approval sits between Ready to Pay and Paid"],
+    says: ["Just tell me what I am approving.", "How much is going out this week?", "Do we know these people?"],
+    thinks: ["How does this affect runway?", "I do not have time to check each one.", "If something is wrong, I am the one who signed it off."],
+    does: ["Approves in gaps between meetings", "Reads the total and the supplier name, little else", "Asks in Slack when unsure"],
+    feels: ["Time-poor", "Exposed", "Protective of cash"],
+    pains: ["Being the bottleneck", "Approving without context", "Finding out about a problem after the money has gone"],
+    gains: ["One confident approval for the whole batch", "Risk flags before, not after", "Cash keeps earning until the payment leaves"],
+    journeys: [
+      { title: "Approving a pay run", note: "Approval is assumed to exist already in the platform. This journey informs what the confirm step shows.", stages: [
+        ["Ping", "Gets a notification", "“Now?” Interrupted", -1, "Vague message, no amount", "Out of scope for the build. Noted for the write-up"],
+        ["Open", "Lands on the page", "“What needs me?”", 0, "Has to hunt for the batch", "Pay run banner at the top with count and total"],
+        ["Judge", "Scans suppliers and amounts", "“Anything odd?” Uneasy", -1, "Fifteen rows that all look alike", "Exceptions first: new supplier, changed bank details, unusual amount. Say plainly when there are none"],
+        ["Approve", "One action for the batch", "“Fine.”", 0, "Fear of approving the flagged one by accident", "Flagged items need their own explicit confirmation"],
+        ["After", "Wants to know it happened", "“Is the money still earning until it goes?”", 1, "No feedback", "Confirmation with pay date and source account"],
+      ]},
+    ],
+  },
+  {
+    id: "accountant", name: "Accountant", tier: "Secondary", core: "Accountant",
+    role: "In-house or outsourced bookkeeper, often across several client companies. Sees the platform's output more than the platform itself.",
+    facts: ["Lives in Xero or NetSuite", "Works in bulk at month end", "Prepares the VAT return"],
+    why: ["Outsourced bookkeepers serve many small companies", "Everything ends up in the ERP", "The brief asks for GL and tax codes per line"],
+    says: ["Which account did this go to?", "Where is the VAT invoice?", "This should be zero-rated."],
+    thinks: ["Whoever coded this did not know the chart of accounts.", "I will have to explain this line in an audit.", "Every wrong code is ten minutes of my time later."],
+    does: ["Reviews in bulk at month end", "Sorts and filters by code, supplier, date", "Fixes mistakes in the ERP, which then disagrees with the source"],
+    feels: ["Precise", "Frustrated by cleaning up after others", "Distrustful of anything untraceable"],
+    pains: ["Miscoded lines", "Mixed VAT rates entered as one line", "Missing evidence", "Fixes made in two places"],
+    gains: ["Codes right first time", "A document behind every line", "A trail of who changed what"],
+    journeys: [
+      { title: "Month-end close", stages: [
+        ["Pull", "Looks at what synced across", "“Is everything here?”", 0, "Some documents never arrived", "Sync state per document. Failed ones are easy to find"],
+        ["Review", "Checks codes line by line", "“Who chose this?”", -1, "Cannot tell an AI guess from a human decision", "Record the origin of each value: extracted, suggested, typed by a person"],
+        ["Correct", "Changes a code or splits a line", "“Again.”", -1, "Codes in the platform do not match the ERP's list", "GL and tax codes come from the connected ERP, never a hard-coded list"],
+        ["VAT", "Checks tax per line", "“Mixed rates on one receipt.”", -1, "Single-line receipts hide the split", "Itemise option on receipts, with tax per line"],
+        ["Evidence", "Opens the source document", "“Show me.”", 0, "File is somewhere else", "Original file always one click from the record"],
+      ]},
+    ],
+  },
+  {
+    id: "fund", name: "Fund finance team", tier: "Secondary", core: "Fund finance",
+    role: "Finance Director or fund controller at a venture firm. Pays legal, audit and fund admin bills across several legal entities.",
+    facts: ["Few invoices, large amounts", "Several entities", "Strict approval chain"],
+    why: ["Funds run several legal entities", "Few invoices, large amounts", "Strict approval chains"],
+    says: ["Which entity is this for?", "This needs two signatures.", "Is that a fund cost or a management company cost?"],
+    thinks: ["Paying from the wrong entity is a serious error, not a typo.", "Investors and auditors will read this."],
+    does: ["Checks the addressed entity on every invoice", "Follows a strict approval chain", "Keeps records for audit"],
+    feels: ["Cautious", "Accountable to outsiders", "Unhurried: accuracy beats speed"],
+    pains: ["Invoices addressed to the wrong entity", "Costs that must be split across entities", "Tools built for volume, not for care"],
+    gains: ["Entity obvious everywhere", "Proof of who approved what"],
+    journeys: [
+      { title: "Paying a large invoice", note: "Multi-entity is not built. The entity is shown on documents so the gap is visible.", stages: [
+        ["Receive", "Uploads or forwards the invoice", "“Which entity?”", 0, "Extraction ignores the “bill to” block", "Extract and show the billed entity. Flag a mismatch with the current one"],
+        ["Review", "Reads every field", "Careful", 1, "None; they want to read it", "Do not hide detail behind automation. Everything inspectable"],
+        ["Code", "Assigns codes, sometimes splits", "“Half to each fund.”", -1, "No way to split", "Out of scope. Noted for the write-up"],
+        ["Approve", "Routes for two approvals", "“Rules are rules.”", 0, "None", "Assumed to exist already"],
+        ["Pay", "Pays from that entity's account", "“From the right pot?”", 0, "Source account defaults to the wrong entity", "Source account shown clearly at confirmation"],
+      ]},
+    ],
+  },
+];
+
+// ---------- 1. title ----------
+slide("Title", "title",
+  el("div", "ring"),
+  el("div", "kicker", "Ledgerline · a concept"),
+  el("h1", "", "One queue for invoices and receipts"),
+  el("p", "", "Ledgerline, a concept: the design process behind a payments page for a B2B finance platform, from research to a working build."),
+  el("ol", "", ["Process", "Sources", "Domain", "Personas", "Finance lead", "Empathy maps", "Journeys", "Competitors", "AI ideas", "Tabs or one list", "What I built", "Journeys to screens", "Edge cases", "Not covered", "What could go wrong", "Metrics"].map((t) => el("li", "chip", t))),
+  el("div", "by", "Alina Kabanets · October 2026")
+);
+
+// ---------- the process ----------
+const PHASES = [
+  ["Discover", "Diverge", ["Sources: product pages, demo videos, competitors, domain reading", "The domain: what an invoice and a receipt are, and every form a receipt takes", "Five personas, the people around an invoice or a receipt"]],
+  ["Define", "Converge", ["One primary persona: the finance lead", "Empathy map and two journeys, worked through on paper", "Assumptions in place of answers that never came"]],
+  ["Develop", "Diverge", ["Competitors and what they already do", "AI ideas, each with a trigger, a confirmation and a measure", "The key decision: two tabs or one mixed list"]],
+  ["Deliver", "Converge", ["Five screens, built and tested", "Each journey finding traced to the screen that answers it", "Edge cases, gaps, risks and metrics"]],
+];
+slide("Process", "dd",
+  head("Process", "How the work went: a double diamond", "Two rounds of opening up and narrowing down: first the problem, then the solution."),
+  el("div", "body",
+    el("div", "diamonds", PHASES.map(([name, mode, items], i) =>
+      el("div", "phase " + (i % 2 ? "conv" : "div"),
+        el("div", "shape", el("span", "", name), el("small", "", mode)),
+        plist(items)))),
+    el("div", "ddlabels", el("span", "", "The problem: what is really going on"), el("span", "", "The solution: what to build"))
+  )
+);
+
+// ---------- 2. where I looked ----------
+const SOURCES = [
+  ["The problem space", "Public pages of treasury and AP platforms", ["Accounts payable and invoice automation pages", "Payee verification and approval features", "Receipt capture by email and WhatsApp", "Pricing and plan limits", "Case studies: who buys and who uses"]],
+  ["Products in use", "Demo videos and walkthroughs", ["Invoice lists, statuses and pay runs", "Review screens: document beside the fields", "Confirm-payment and settlement screens", "Patterns already common, to reuse rather than reinvent"]],
+  ["Competitors", "Their own product pages", ["Ramp: Bill Pay and AP agents", "Mercury: Bill Pay", "Rho: treasury and AP", "Payhawk: invoice vs receipt recognition", "Brex, Pleo", "Lists of treasury tools"]],
+  ["Domain", "Reading to get the basics right", ["What treasury means in fintech", "How invoices work, and how receipts differ", "Tax codes and GL codes", "What an ERP is; NetSuite, Campfire, Light", "Why receipts and invoices share a page"]],
+];
+slide("Sources", "",
+  head("Discover · Sources", "Where I looked"),
+  el("div", "body", el("div", "cols c4", SOURCES.map(([t, sub, items], i) =>
+    el("div", "card", el("div", "num", "0" + (i + 1)), el("h4", "", t), el("p", "sub", sub), plist(items)))))
+);
+
+// ---------- 3. domain ----------
+const flow = (states) => el("div", "flow", states.flatMap((s, i) => [
+  i ? el("span", "arrow", "→") : null,
+  el("span", "state" + (i === states.length - 1 ? " end" : ""), s),
+]));
+const domainCard = (name, sub, states, rows) => {
+  const c = el("div", "card", el("h4", "", name), el("p", "sub", sub), flow(states), plist(rows));
+  c.querySelector("h4").style.fontSize = "26px";
+  return c;
+};
+slide("Domain", "domain",
+  head("Discover · Domain", "Two documents, as the brief describes them"),
+  el("div", "body",
+    el("div", "cols c2",
+      domainCard("Invoice", "A request for payment. Paid from the platform.", ["Draft", "Ready to Pay", "Paid"], [
+        "Contact includes payment details, because the platform pays it",
+        "Line items can be edited to match GL codes and tax codes",
+        "It must be clear which state it is in",
+      ]),
+      domainCard("Receipt", "Proof of something already paid. Not paid through the platform.", ["Draft", "Submitted"], [
+        "Contact only needs a merchant name",
+        "Line items default to one line, with the option to itemise",
+        "It must be clear which state it is in",
+      ])
+    ),
+    el("div", "shared", "Both arrive by", ...["Email", "Manual upload", "WhatsApp", "Xero"].map((t) => el("span", "chip", t)), "and both must be ready for future ERPs:", ...["NetSuite", "Campfire", "Light"].map((t) => el("span", "chip", t)))
+  )
+);
+
+// ---------- receipts: examples ----------
+const RECEIPTS = [
+  ["Travel", ["Taxi or ride-hail", "Train ticket", "Flight", "Hotel stay", "Car hire, fuel", "Parking, tolls, congestion charge", "Public transport top-up"]],
+  ["Meals and entertainment", ["Client lunch or dinner", "Coffee meeting", "Team lunch or social", "Food delivery for the office", "Drinks after an event"]],
+  ["Office and supplies", ["Stationery and printer ink", "Office snacks and groceries", "Keyboard, monitor, cables", "Furniture", "Postage and courier", "Cleaning supplies"]],
+  ["Software paid by card", ["SaaS tools", "Cloud, hosting, domain renewal", "AI tools", "App store purchases", "Online advertising"]],
+  ["People and events", ["Conference or event ticket", "Training course", "Books", "Professional membership", "Gifts for clients or staff", "Co-working day pass"]],
+  ["Other", ["Phone or broadband bill paid by card", "Bank or card fee", "First-aid supplies for the office", "Cash withdrawal slip"]],
+];
+slide("Receipts", "rc",
+  head("Discover · Receipts", "What a receipt can be", "Things already paid for by card or cash."),
+  el("div", "body",
+    el("div", "cols c3", RECEIPTS.map(([t, items]) => el("div", "card", el("h4", "", t), el("div", "chips", items.map((s) => el("span", "chip", s)))))),
+    el("div", "src-note", "General knowledge.")
+  )
+);
+
+const FORMS = ["Paper till receipt, photographed", "Card terminal slip: the total only, not what was bought", "Email receipt or order confirmation", "PDF downloaded from a supplier's account page", "Screenshot from an app", "Hotel folio, several pages long", "Handwritten receipt"];
+const ODD = [
+  ["Mixed VAT rates", "A supermarket receipt with food at 0% and other goods at 20%"],
+  ["Tip or service charge", "A restaurant bill where the tip carries no VAT"],
+  ["Foreign currency", "A hotel in euros, a US software subscription in dollars"],
+  ["No VAT shown", "A taxi, a small trader, an overseas supplier"],
+  ["Part personal", "A hotel bill that includes a minibar or a personal extra"],
+  ["Refund or return", "A negative amount"],
+  ["Recurring", "The same subscription receipt every month"],
+];
+slide("Receipts", "rc comp",
+  head("Discover · Receipts", "The forms it takes, and the ones that behave differently"),
+  el("div", "body",
+    el("div", "cols rc2",
+      el("div", "card", el("h4", "", "Forms a receipt can take"), el("p", "sub", "What actually gets uploaded or sent"), plist(FORMS)),
+      el("div", "card", el("h4", "", "Ones that behave differently"), el("p", "sub", "Same document type, different handling"),
+        el("dl", "two", ODD.map(([n, d]) => el("div", "", el("dt", "", n), el("dd", "", d)))))
+    ),
+    el("div", "src-note", "General knowledge.")
+  )
+);
+
+// ---------- 5. personas ----------
+slide("Personas", "",
+  head("Discover · Personas", "Five people around an invoice or a receipt"),
+  el("div", "body",
+    el("div", "pcards", PERSONAS.map((p) => el("div", "card",
+      el("div", "", el("span", p.tier === "Primary" ? "tag" : "tag soft", p.tier)),
+      el("h4", "", p.name),
+      el("p", "", p.role),
+      el("div", "why", el("h3", "", "Why this persona"), plist(p.why))
+    ))),
+    el("div", "note",
+      el("span", "assume", "Assumption"),
+      "Chosen from public material, not from interviews. The primary / secondary / contributor labels are mine. The employee is treated as a sender, not a user of the page: senders need no login."
+    ),
+    el("div", "note big",
+      el("span", "assume decide", "Decision"),
+      "For the sake of this task, I decided to proceed with just one primary persona: the finance lead. The empathy maps and journeys for the other four are in the repo, not in this deck."
+    )
+  )
+);
+
+// ---------- finance lead: who they are, what they do ----------
+const TITLES = [
+  ["Founding Operator", "An early generalist hire, often not an accountant. Runs finance alongside HR, legal and office operations because nobody else does.", "5–30 people, no finance hire yet"],
+  ["Head of Finance", "Usually the first dedicated finance hire, often a qualified accountant. Does everything from paying bills to the board report.", "20–100 people"],
+  ["Controller", "Responsible for the books being correct: the month-end close, the audit, the controls. “Financial Controller” in the UK.", "50–300 people, reports to a CFO or Finance Director"],
+  ["Finance Director", "The UK name for the senior finance leader below, or instead of, a CFO. More strategy and board work, still close to the detail.", "50–500 people"],
+];
+slide("Finance lead", "titles",
+  head("Define · Finance lead", "Four titles, roughly one job", "The most senior person who looks after the money day to day. The title mostly reflects company size and background."),
+  el("div", "body",
+    el("div", "cols c4", TITLES.map(([t, d, co]) => el("div", "card", el("h4", "", t), el("p", "", d), el("div", "co", co)))),
+    el("div", "plans",
+      el("div", "", el("h3", "", "A team of one to three")),
+      ...[["One", "The lead does everything, with an outside accounting firm for bookkeeping and tax"], ["Two", "The lead plus a junior who handles invoices and expenses"], ["Three", "The lead, a junior, and someone on reporting and forecasting"]]
+        .map(([n, d]) => el("div", "", el("b", "", n), el("small", "", d)))
+    ),
+    el("div", "fits",
+      el("div", "", el("h3", "", "How they differ")),
+      el("div", "", "A Founding Operator may not be confident choosing a GL or tax code. A Head of Finance or Controller knows the chart of accounts well. A Finance Director with a junior is more often the approver than the one keying things in.")
+    ),
+    el("div", "src-note", "General knowledge about finance teams.")
+  )
+);
+
+// "*" marks work that touches invoices or receipts.
+const CADENCE = [
+  ["Every day or two", ["Check bank balances and what is due to go out", "*Process invoices: check, code, get approved", "Answer questions: “has this supplier been paid?”", "*Chase approvals, receipts and customer payments"]],
+  ["Every week", ["*Run a payment batch (the pay run)", "*Reconcile: match the bank to the books", "Update the cash forecast"]],
+  ["Every month", ["*Month-end close: every transaction recorded and coded, then lock the month", "Run payroll", "Management accounts for founders and board", "Compare spending with budget"]],
+  ["Every quarter or year", ["*VAT return (quarterly in the UK)", "Board pack and investor updates", "Budget and forecast", "Annual audit and tax filings", "Fundraising support"]],
+];
+slide("Finance lead", "cadence",
+  head("Define · Finance lead", "What they do, and how often"),
+  el("div", "body",
+    el("div", "cols c4", CADENCE.map(([t, items]) => el("div", "card", el("h4", "", t),
+      el("ul", "", items.map((s) => el("li", s.startsWith("*") ? "hit" : "", el("span", "", s.replace(/^\*/, ""))))))))
+    ,
+    el("div", "fits",
+      el("div", "", el("h3", "", "Where AP fits")),
+      el("div", "", "Paying invoices and collecting receipts is a small, repetitive part of the job, and where mistakes cost real money: a duplicate payment, a payment to a fraudster, a miscoded expense that distorts the month. Treasury usually has nobody dedicated to it at this size.")
+    ),
+    el("div", "src-note", el("span", "", el("i", "dot"), "Touches invoices or receipts"), el("span", "", "General knowledge about finance teams."))
+  )
+);
+
+// ---------- 6+. empathy maps and journeys ----------
+const quadrant = (cls, title, list) => el("div", "q " + cls, el("h3", "", title), list);
+const empathy = (p, i) => slide("Empathy map · " + p.name, "",
+  el("div", "em",
+    el("div", "who",
+      el("div", "kicker", "Define · Empathy map · " + p.tier + " persona"),
+      el("h2", "", p.name),
+      el("p", "", p.role),
+      el("div", "facts", p.facts.map((f) => el("span", "chip", f))),
+      el("div", "legend",
+        el("span", "", el("i", "dot"), "From public material"),
+        el("span", "", el("i", "dot hyp"), "Hypothesis, not interviewed"),
+        el("span", "", "Quotes are illustrative")
+      )
+    ),
+    el("div", "maps",
+      el("div", "quad",
+        quadrant("says", "Says", mlist(p.says, true)),
+        quadrant("thinks", "Thinks", mlist(p.thinks)),
+        quadrant("does", "Does", mlist(p.does)),
+        quadrant("feels", "Feels", mlist(p.feels)),
+        el("div", "core", p.core)
+      ),
+      el("div", "pg",
+        el("div", "card pains", el("h3", "", "Pains"), mlist(p.pains)),
+        el("div", "card gains", el("h3", "", "Gains"), mlist(p.gains))
+      )
+    )
+  )
+);
+
+const MOOD_Y = { "1": 14, "0": 29, "-1": 44 };
+const journey = (p, j) => {
+  const n = j.stages.length;
+  const grid = el("div", "jm" + (n >= 7 ? " dense" : ""));
+  grid.style.setProperty("--n", n);
+  const row = (label, cls, cells, first) => {
+    grid.append(el("div", "lab " + cls + (first ? " r0" : ""), label));
+    cells.forEach((c) => grid.append(el("div", cls + (first ? " r0" : ""), c)));
+  };
+  row("Stage", "stage", j.stages.map((s, i) => [el("i", "", String(i + 1)), s[0]]), true);
+  row("Does", "", j.stages.map((s) => s[1]));
+  row("Thinks, feels", "think", j.stages.map((s) => s[2]));
+
+  grid.append(el("div", "lab", "Mood"));
+  const mood = el("div", "mood");
+  const pts = j.stages.map((s, i) => [((i + 0.5) / n) * 100, MOOD_Y[s[3]]]);
+  mood.innerHTML = '<svg viewBox="0 0 100 58" preserveAspectRatio="none"><polyline fill="none" stroke="#bdbeba" stroke-width="1" vector-effect="non-scaling-stroke" points="' +
+    pts.map((q) => q.join(",")).join(" ") + '"/></svg>';
+  pts.forEach(([x, y], i) => {
+    const d = el("b", j.stages[i][3] > 0 ? "up" : j.stages[i][3] < 0 ? "down" : "");
+    d.style.left = x + "%";
+    d.style.top = y + "px";
+    mood.append(d);
+  });
+  grid.append(mood);
+
+  row("Friction", "", j.stages.map((s) => s[4]));
+  grid.append(el("div", "lab should", "What the page should do", el("small", "", "My conclusion")));
+  j.stages.forEach((s) => grid.append(el("div", "should", s[5])));
+
+  return slide("Journey · " + p.name, "",
+    head("Define · User journey · " + p.name, j.title),
+    el("div", "body", grid, el("div", "jnote", (j.note ? j.note + " " : "") + "Stages, thoughts and friction are hypotheses."))
+  );
+};
+
+// Only the primary persona gets an empathy map and journeys in the deck. The other four
+// stay on the personas slide; their maps and journeys are in docs/PERSONAS.md.
+PERSONAS.filter((p) => p.tier === "Primary").forEach((p, i) => {
+  empathy(p, i);
+  p.journeys.forEach((j) => journey(p, j));
+});
+
+// ---------- working on paper ----------
+const shot = (file, caption) => {
+  const img = el("img");
+  img.src = "images/" + file;
+  img.alt = caption;
+  img.loading = "lazy";
+  return el("figure", "shot", img, el("figcaption", "", caption));
+};
+slide("Notes", "",
+  head("Define · Working on paper", "My notes on the journeys", "Before any screen was designed, I worked through each journey by hand: the steps, the friction, and ideas."),
+  el("div", "body", el("div", "shots s3",
+    shot("notes-desk.jpg", "Persona, pains and both journeys"),
+    shot("notes-journey-invoice.jpg", "Invoice journey: gather, triage, review"),
+    shot("notes-journey-receipts.jpg", "Receipts journey: collect, check, fix, close")
+  ))
+);
+
+// ---------- competitors ----------
+const COMP = [
+  ["Treasury plus AP", "Closest to this problem", [
+    ["Mercury", "Bill pay with AI extraction, duplicate detection, approvals from Slack or mobile"],
+    ["Ramp", "AP agents code line items from history and run fraud checks. Receipts by SMS or Slack matched to card spend"],
+    ["Rho", "Banking, treasury, AP and cards in one platform"],
+    ["Brex", "Invoice scanning, approval workflows, treasury"],
+    ["Airwallex, Revolut Business", "Bill pay beside multi-currency accounts · not verified"],
+  ]],
+  ["Spend and AP, UK and EU", "No treasury", [
+    ["Payhawk", "OCR decides invoice vs receipt in 60+ languages. For NetSuite, receipts export as journal entries. An agent chases missing documents"],
+    ["Pleo", "Cards and expenses with receipt capture. Often integrated with AP tools"],
+    ["Spendesk, Apron, Pennylane", "Invoice inbox with extraction and accounting export · not verified"],
+  ]],
+  ["Treasury only", "Visibility, forecasting, investing", [
+    ["Trovata, Embat", "Cash visibility and forecasting"],
+    ["Kyriba, HighRadius", "Enterprise treasury, needs a treasury team"],
+    ["TreasurySpring", "Cash investment"],
+    ["Nomentia, Cobase", "Payments and multi-bank connectivity"],
+  ]],
+  ["AI-native ERPs", "Named in the brief as future integrations", [
+    ["Light", "Finance platform with its own bill handling"],
+    ["Campfire", "AI-native accounting with AP and AR"],
+    ["NetSuite", "The incumbent ERP for larger companies"],
+  ]],
+];
+slide("Competitors", "comp",
+  head("Develop · Competitors", "Who else does this, and what they have"),
+  el("div", "body", el("div", "cols c4", COMP.map(([t, sub, items]) =>
+    el("div", "card", el("h4", "", t), el("p", "sub", sub),
+      el("dl", "", items.flatMap(([n, d]) => [el("div", "", el("dt", "", n), el("dd", "", d))]))))))
+);
+
+
+
+// ---------- AI ideas: mine, made specific ----------
+const MY_IDEAS = [
+  ["Collect documents from the inbox", "A supplier emails an invoice to a person, not to the forwarding address", "Finds it in the connected mailbox and adds it as a draft, with “found in Sam's inbox” as its source", "Nothing new: it goes through the same review", "Invoices that arrive without anyone forwarding them"],
+  ["Check the other channels", "Month end is a week away", "Looks through each channel (shared inbox, WhatsApp, Slack, Xero) for documents not yet in the platform", "A list of what was found, to add or ignore", "Documents found before month end, not after"],
+  ["Predict what is missing", "The 5th passes with no AWS invoice", "Lists documents that usually arrive by now, each with its usual date and amount", "Dismiss, or chase", "Late-payment fees avoided"],
+  ["Ask for missing files", "A card charge has no receipt after three days", "Messages the person who paid, on the channel they use, naming the charge", "Finance sets the rule once; every message is logged", "Receipts received within 48 hours of the ask"],
+  ["In-app scanner", "A photo is blurred or cropped", "Says so at once and guides a retake before it is sent", "The sender retakes it", "Photos readable first time"],
+  ["Message about what cannot wait", "An invoice is due before the fund can pay it", "One message: “Swift Couriers is due tomorrow; the fund cannot pay until Tuesday. Pay from the business account?”", "One tap: pay, or snooze", "Invoices paid late for avoidable reasons"],
+  ["Point at an area of the document", "Extraction misses the same field twice for one supplier", "The user draws a box round the value; that region is used for this supplier from then on", "Sees “learned for this supplier”; can undo", "Corrections per document for that supplier"],
+  ["AI summary", "An approver opens a batch of fifteen", "Three lines: the total, what is new or unusual, what changed since last month", "Approves, or opens the flagged ones", "Time to approve; flagged items opened"],
+  ["AI itemisation", "A receipt shows more than one VAT rate", "Proposes the split into lines, each with its rate", "Accept, or edit a line", "Receipts itemised without typing"],
+  ["Agent to agent with the ERP", "The ERP rejects a document", "The platform's agent asks the ERP's agent why, and proposes the fix", "The accountant accepts the fix", "Sync failures resolved without a person"],
+];
+const itable = el("div", "itable",
+  ["Idea", "Trigger", "What the AI does", "What a person confirms", "How to measure it"].map((t) => el("div", "hd", t)),
+  MY_IDEAS.flatMap((row) => row.map((cell, n) => el("div", n === 0 ? "name" : "", cell)))
+);
+slide("AI ideas", "",
+  head("Develop · AI ideas", "My AI ideas, made specific", "Beyond what AP tools commonly do. Not in the build."),
+  el("div", "body", itable, el("div", "src-note", "The ideas are from my notes on the journeys; the worked examples in each row were drafted with AI. Left out, because AP tools commonly do them already: remembering corrections, coding suggestions with a reason, flags for changed bank details."))
+);
+
+// ---------- design question: tabs or one list ----------
+const TABS_FOR = [
+  "The columns differ: due date, payee and Pay for invoices; date paid, sender and Submit for receipts",
+  "The bulk actions differ: “Pay selected” and “Submit selected” cannot share a mixed selection",
+  "The headline number is about invoices: money still to go out, not money already spent",
+  "The work happens at different times: a weekly pay run, receipts at month end",
+  "The brief asks for it: receipts were never separated from invoices, and it wants “one payments page”",
+  "It fixes today's problem: receipts sit under Paid invoices",
+];
+const LIST_FOR = [
+  "Upload is mixed: drop ten files and half vanish into the other tab",
+  "A misclassified document lands where nobody is looking",
+  "Reviewing a draft is the same activity for both",
+  "Search: someone looking for “Uber” should not have to guess the tab",
+  "It scales: a new document type is a filter option, not another tab",
+];
+slide("Tabs or one list", "tabsq",
+  head("Develop · Design question", "Invoices and receipts: two tabs, or one mixed list?"),
+  el("div", "body",
+    el("div", "cols c2",
+      el("div", "card", el("h4", "", "For two tabs"), plist(TABS_FOR)),
+      el("div", "card", el("h4", "", "For one mixed list"), plist(LIST_FOR))
+    ),
+    el("div", "fits",
+      el("div", "", el("h3", "", "Tabs must solve")),
+      el("div", "", "Where uploads land: an upload panel names the type chosen for each file and lets you switch it. Work hidden in the other tab: a count on each tab. Search: it covers both tabs.")
+    ),
+    el("div", "fits",
+      el("div", "", el("h3", "", "Third option")),
+      el("div", "", "A shared “to review” view for everything new, in front of the two type views. More to build and explain, so noted as the alternative.")
+    ),
+    el("div", "note big",
+      el("span", "assume decide", "Decision"),
+      "Two tabs, each with a count, plus an upload panel that shows where every file went."
+    )
+  )
+);
+
+// ---------- what I built ----------
+const BUILT = [
+  ["Payments", "A tab for invoices and a tab for receipts, each with a count of what needs action. Search, sort, filter by status, pay or submit several at once."],
+  ["Upload", "Several files at once. Each shows what it was read as and why, or why it failed."],
+  ["Review", "The document beside the fields. Where each value came from. Flags on what the AI was unsure of. Line items with GL and tax codes."],
+  ["Confirm payments", "The account and its balance, each payment's date, and anything unusual listed first."],
+  ["Payments scheduled", "What happens next. The invoice shows Processing, then Paid."],
+];
+const built = el("div", "cols c5", BUILT.map(([n, d], i) => el("div", "card", el("div", "num", "0" + (i + 1)), el("h4", "", n), el("p", "", d))));
+slide("What I built", "built",
+  head("Deliver · The build", "What I built", "Five screens, one user: the finance lead."),
+  el("div", "body",
+    built,
+    el("div", "states",
+      el("div", "", el("h3", "", "Invoice"), flow(["Draft", "Ready to Pay", "Paid"])),
+      el("div", "", el("h3", "", "Receipt"), flow(["Draft", "Submitted"]))
+    ),
+    el("div", "src-note", "Everything behind the UI is mocked.")
+  )
+);
+
+// ---------- from the journeys to the screens ----------
+const TRACE = [
+  ["Invoice", "Gather", "One bad file blocks the batch", "Each file has its own result. A failure shows its reason; the rest carry on"],
+  ["", "Triage", "Everything looks equally urgent", "Two tabs with counts. The state in words with the reason. A status filter"],
+  ["", "Review", "Re-reading the whole PDF to check five fields", "Document beside the fields. Clicking a field lights up its place on the document"],
+  ["", "Review", "Can I trust this? Flag only what is uncertain", "Only uncertain values are flagged, and stay flagged until confirmed"],
+  ["", "Review", "Show where each value came from", "From document, from history, edited by you, not found"],
+  ["", "Code", "The same codes for the same supplier, every time", "Codes suggested from history, with the reason"],
+  ["", "Check payee", "Is this the real account?", "Compared with the saved contact. A change blocks payment. New details are typed by a person"],
+  ["", "Ready to pay", "Not clear what is still missing", "A checklist of what blocks it. Pay now, or leave it ready for a pay run"],
+  ["", "Fund and pay", "Will the money be there in time?", "Balance against the total, what is already scheduled, a warning when it would arrive late"],
+  ["", "Fund and pay", "Remove from the batch and review before paying: hard to find", "Review, Pay on and Remove are labelled actions on each payment"],
+  ["", "After", "Paid, but the sync failed silently", "Sync state on the row, with retry"],
+  ["Receipts", "Collect", "Receipts buried under paid invoices", "Their own tab. Each row shows who sent it and by which channel"],
+  ["", "Check", "Opening each one to check a single field", "Enough in the row to decide. Submit from the row"],
+  ["", "Fix", "Splitting a total by hand; the totals drift", "Itemise keeps the lines adding up to the total"],
+  ["", "Close", "No bulk action", "Select several and submit together"],
+  ["", "Close", "Why is there no Ready state for receipts?", "Not a state: shown as the reason, “Draft · Ready to submit”"],
+];
+slide("Journeys to screens", "",
+  head("Deliver · The build", "From the journeys to the screens", "What I found in each journey, and what it became in the build."),
+  el("div", "body",
+    el("div", "trace",
+      ["", "Stage", "Found in the journey", "In the build"].map((t) => el("div", "hd", t)),
+      TRACE.flatMap(([group, stage, found, built]) => [el("div", "grp", group), el("div", "stage", stage), el("div", "", found), el("div", "", built)])
+    )
+  )
+);
+
+// ---------- edge cases in the build ----------
+const EDGES = [
+  ["Uploading", [
+    ["File cannot be read", "Reason shown; enter by hand, or remove"],
+    ["Not an invoice or receipt", "Turned away, with the reason"],
+    ["Over 2MB, or wrong file type", "Turned away"],
+    ["Some files in a batch fail", "The rest carry on"],
+    ["Wrong type", "Change it anywhere; nothing typed is lost"],
+    ["“Invoice” already paid by card", "Read as a receipt, with the reason"],
+    ["Part-paid invoice", "Still an invoice"],
+  ]],
+  ["Checking", [
+    ["Duplicate", "Flagged with a link; monthly subscriptions are not"],
+    ["Same cost as an invoice and a receipt", "Flagged on the later one"],
+    ["Totals do not match the lines", "Blocked"],
+    ["Tax does not match its code", "Blocked"],
+    ["Contact is not the supplier", "Blocked until confirmed"],
+    ["Supplier bank details changed", "Blocked until resolved"],
+    ["New contact, or no payment details", "Typed by a person, never copied"],
+    ["Credit note or zero total", "Cannot be paid"],
+    ["Code no longer in the ERP", "Flagged on the line"],
+  ]],
+  ["Paying", [
+    ["First payment to a supplier", "Listed at confirm"],
+    ["Foreign currency", "Paid only from an account in that currency"],
+    ["Not enough funds", "Button disabled; shortfall shown"],
+    ["Due before the money can leave", "Warned; a faster account suggested"],
+    ["Double click, or two browser tabs", "The second attempt is refused"],
+    ["Payment fails", "Money returns to the account; retry"],
+    ["Balance drops before the date", "Fails on the day; no overdraft"],
+  ]],
+  ["After, and receipts", [
+    ["Paid but not synced to the ERP", "Shown on the row, with retry"],
+    ["Edited after Ready to Pay", "Back to draft"],
+    ["Refresh mid-request", "Asked again; success is never assumed"],
+    ["Stops being ready while selected", "Drops out of the selection"],
+    ["Receipt confirming a paid invoice", "Attached to it as proof of payment"],
+    ["Card slip", "Flagged; stays one line"],
+    ["Refund", "Negative amounts"],
+    ["Tip, or mixed VAT", "A line with no tax; itemise"],
+  ]],
+];
+slide("Edge cases", "edges comp",
+  head("Deliver · The build", "Edge cases in the build", "Most have an example in the demo data. A few (a part-paid invoice, an oversized file, two browser tabs, a balance that drops) are handled but have no ready-made example."),
+  el("div", "body", el("div", "cols c4", EDGES.map(([group, items]) =>
+    el("div", "card", el("h4", "", group), el("dl", "", items.map(([n, d]) => el("div", "", el("dt", "", n), el("dd", "", d))))))))
+);
+
+// ---------- not covered, and what could go wrong ----------
+const GAPS = [
+  ["Mocked", [
+    ["No backend", "Four calls a server would answer are faked, with delays and scripted failures"],
+    ["No real extraction", "A dropped file gets a scripted result. Size and type checks are real"],
+    ["Documents drawn from data", "Not PDFs. A real build would use a full document viewer"],
+    ["Other channels", "Email, WhatsApp and Xero appear only as the source on a document"],
+    ["Time does not pass", "Later payments stay Scheduled until a demo control runs them"],
+  ]],
+  ["Not built", [
+    ["The pay-run view", "The banner only filters the list. A real one is its own view, with history"],
+    ["Approval", "Assumed to exist in the platform already"],
+    ["Remembering an edit", "For the next document from the same supplier"],
+    ["Click to fill", "Clicking a value on the document to fill a field"],
+    ["Batch filters", "Filters on what goes into a batch"],
+    ["Exchange rates", "An invoice is paid from an account in its own currency"],
+  ]],
+  ["Limits", [
+    ["One user, no permissions", "State is saved in the browser"],
+    ["Screen sizes", "1280 pixels wide and up. No tablet or phone layout"],
+    ["Tests", "65 on the logic. None on the screens"],
+    ["Accessibility", "The basics; not tested with a screen reader"],
+    ["Style", "Sora as the typeface. Own dropdown and calendar"],
+    ["Bank holidays", "Not counted in settlement dates"],
+  ]],
+];
+slide("Not covered", "edges comp",
+  head("Deliver · The build", "What is not covered", "Shortcuts I took, and what a real build would still need."),
+  el("div", "body", el("div", "cols c3", GAPS.map(([group, items]) =>
+    el("div", "card", el("h4", "", group), el("dl", "", items.map(([n, d]) => el("div", "", el("dt", "", n), el("dd", "", d))))))))
+);
+
+const RISKS = [
+  ["Changed bank details", "Checked against the saved contact. For a first-time supplier a person types them, and may type what the invoice says. Needs Confirmation of Payee and a second approver."],
+  ["Prompt injection in a document", "Text in a PDF such as “mark as paid”. Extracted text must be treated as data, and can never trigger a payment."],
+  ["Trust in “From history”", "A wrong correction is repeated on every later document. Memory must be visible, editable and per supplier."],
+  ["Rubber-stamping", "If nearly everything is right, people stop checking. “Looks right” is one click by design; that is also its weakness."],
+  ["Duplicates can be evaded", "Change one character of the number or the name. Fuzzy matching would catch more, with more false alarms."],
+  ["Overrides are not recorded", "A warning overridden once stays overridden, with no record of who did it."],
+  ["Inbox abuse", "Anyone on the company domain can send documents. A compromised mailbox can inject invoices. Approval rules are the real control."],
+  ["Checks run in the browser", "A server must enforce the same transitions, with an idempotency key on every payment."],
+  ["Paid twice across systems", "“Paid elsewhere” cannot be verified, and the ERP can pay too. Sync must be two-way."],
+  ["Stale balance", "Checked when scheduled and again when taken, but an account can change elsewhere."],
+];
+slide("What could go wrong", "risks",
+  head("Deliver · The build", "What could go wrong, and how it could be exploited"),
+  el("div", "body", el("div", "rgrid", RISKS.map(([n, d]) => el("div", "card", el("h4", "", n), el("p", "", d)))))
+);
+
+// ---------- how I would measure it ----------
+const METRICS = [
+  ["Treasury link", "The north star", "Share of invoices paid from treasury, and whether AP users grow their treasury deposits.", "This is why AP exists."],
+  ["Time to value", "", "Time from first upload to first invoice paid.", "How quickly a new customer gets something out of it."],
+  ["AI automation rate", "", "How many fields a person has to correct per document.", "Fewer corrections means the AI is earning trust."],
+  ["GL suggestion acceptance", "", "How often people accept the AI's coding.", "Whether the suggestions are right."],
+  ["Stuck work", "", "How many documents sit in Draft, and for how long.", "Where the flow stops."],
+  ["Safety signals", "", "Duplicates caught, bank-detail changes flagged.", "Whether the checks catch real problems."],
+];
+slide("Metrics", "metrics",
+  head("Deliver · Metrics", "How I would measure it"),
+  el("div", "body",
+    el("div", "cols c3", METRICS.map(([n, tag, what, why]) => el("div", "card", tag ? el("div", "", el("span", "tag", tag)) : null, el("h4", "", n), el("p", "", what), el("p", "why", why)))),
+    el("div", "fits",
+      el("div", "", el("h3", "", "Already logged")),
+      el("div", "", "The app sends these events to the console as you use it: document_uploaded, ai_suggestion_accepted, ai_suggestion_changed, field_corrected, duplicate_flagged, bank_change_flagged, invoice_ready, payment_scheduled, invoice_paid, receipt_submitted.")
+    )
+  )
+);
+
+// ---------- mount and navigate ----------
+const root = document.getElementById("slides");
+slides.forEach((s) => root.append(s));
+const stage = document.getElementById("stage");
+const fit = () => {
+  const k = Math.min(innerWidth / 1440, innerHeight / 810);
+  stage.style.transform = "translate(-50%, -50%) scale(" + k + ")";
+};
+let at = 0;
+const go = (i) => {
+  at = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, n) => s.classList.toggle("active", n === at));
+  document.getElementById("count").textContent = String(at + 1).padStart(2, "0") + " / " + slides.length;
+  document.getElementById("where").textContent = at === 0 ? "" : "Design process · " + slides[at].dataset.section;
+  document.getElementById("progress").style.width = ((at + 1) / slides.length) * 100 + "%";
+  if (location.hash !== "#" + (at + 1)) history.replaceState(null, "", "#" + (at + 1));
+};
+document.getElementById("prev").onclick = () => go(at - 1);
+document.getElementById("next").onclick = () => go(at + 1);
+addEventListener("keydown", (e) => {
+  if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); go(at + 1); }
+  else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(at - 1); }
+  else if (e.key === "Home") go(0);
+  else if (e.key === "End") go(slides.length - 1);
+});
+addEventListener("resize", fit);
+addEventListener("hashchange", () => go((parseInt(location.hash.slice(1), 10) || 1) - 1));
+fit();
+go((parseInt(location.hash.slice(1), 10) || 1) - 1);
+</script>
+</body>
+</html>
