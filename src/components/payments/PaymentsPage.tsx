@@ -270,6 +270,6 @@ export function PaymentsPage() {
 }
 
 function emptyText(tab: Tab, bucket: Bucket) {
-  if (tab === "invoices") return bucket === "open" ? "No invoices waiting. Upload one, or forward it to the address above." : "No paid invoices yet.";
-  return bucket === "open" ? "No receipts waiting. Upload one, or send it by email or WhatsApp." : "No submitted receipts yet.";
+  if (tab === "invoices") return bucket === "open" ? "No invoices waiting. Upload one to start." : "No paid invoices yet.";
+  return bucket === "open" ? "No receipts waiting. Upload one to start." : "No submitted receipts yet.";
 }
