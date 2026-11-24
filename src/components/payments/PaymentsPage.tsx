@@ -131,15 +131,15 @@ export function PaymentsPage() {
 
   return (
     <div className={`px-6 pt-5 min-[1400px]:px-8 ${selection.length ? "pb-28" : "pb-10"}`}>
-      <header className="flex items-center justify-between">
+      <header>
         <h1 className="text-[17px] font-medium">Payments</h1>
+      </header>
+
+      <div className="mt-6 flex items-end justify-between gap-8">
+        <Hero tab={tab} docs={counted} hydrated={state.hydrated} />
         <ButtonLink href="/payments/upload" size="md">
           <Plus size={14} /> Upload
         </ButtonLink>
-      </header>
-
-      <div className="mt-6 flex items-start justify-between gap-8">
-        <Hero tab={tab} docs={counted} hydrated={state.hydrated} />
       </div>
 
       {scheduled.length > 0 && (
