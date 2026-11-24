@@ -155,6 +155,7 @@
   /* photos and screenshots */
   .shots { display: grid; gap: 16px; }
   .shots.s3 { grid-template-columns: repeat(3, 1fr); }
+  .shots.s4 { grid-template-columns: repeat(4, 1fr); }
   .shot { margin: 0; }
   .shot img { display: block; width: 100%; height: 400px; object-fit: contain; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   .shot figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
@@ -694,17 +695,18 @@ PERSONAS.filter((p) => p.tier === "Primary").forEach((p, i) => {
 // ---------- working on paper ----------
 const shot = (file, caption) => {
   const img = el("img");
-  img.src = "images/" + file;
+  img.src = "design-process/" + file;
   img.alt = caption;
   img.loading = "lazy";
   return el("figure", "shot", img, el("figcaption", "", caption));
 };
 slide("Notes", "",
   head("Define · Working on paper", "My notes on the journeys", "Before any screen was designed, I worked through each journey by hand: the steps, the friction, and ideas."),
-  el("div", "body", el("div", "shots s3",
-    shot("notes-desk.jpg", "Persona, pains and both journeys"),
-    shot("notes-journey-invoice.jpg", "Invoice journey: gather, triage, review"),
-    shot("notes-journey-receipts.jpg", "Receipts journey: collect, check, fix, close")
+  el("div", "body", el("div", "shots s4",
+    shot("notes-journey-invoice-1.jpg", "Invoice journey 1/2: gather, triage, review"),
+    shot("notes-journey-invoice-2.jpg", "Invoice journey 2/2: code to after"),
+    shot("notes-journey-receipts.jpg", "Receipts journey: collect, check, fix, close"),
+    shot("notes-pains-gains.jpg", "Pains and gains")
   ))
 );
 

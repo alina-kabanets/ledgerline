@@ -111,7 +111,7 @@ another system means adding an adapter.
 - `convert.test.ts`: switching a document between invoice and receipt loses nothing.
 - `lines.test.ts`: money parsing and line arithmetic.
 
-## Questions worth being ready for
+## Why it’s built this way
 
 - **Why a discriminated union and not one type with optional fields?** Impossible states
   can't be written: a receipt with a due date, an invoice without a supplier field.

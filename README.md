@@ -4,7 +4,7 @@
 platform, designed and built end to end: research, design, and a working Next.js app with
 a tested domain model.
 
-**[Live demo](https://ledgerline-tawny-nu.vercel.app)** · **[Design process deck](docs/design-process.html)** · **[Code walkthrough](docs/WALKTHROUGH.md)**
+**[Live demo](https://ledgerline-tawny-nu.vercel.app)** · **[Design process deck](https://ledgerline-tawny-nu.vercel.app/design-process.html)** · **[Code walkthrough](docs/WALKTHROUGH.md)**
 
 ![The payments queue: invoices tab with states, amounts and the main action on every row](docs/images/app-01-invoices.jpg)
 
@@ -82,7 +82,7 @@ subscriptions), totals that don't add up, tax that doesn't match its code, chang
 details, a contact that isn't the supplier, credit notes, foreign currency, not enough
 funds, a due date sooner than the money can leave, double clicks and two browser tabs,
 failed payments and failed syncs, and a refresh in the middle of any of them. The full list
-is in the [design process deck](docs/design-process.html).
+is in the [design process deck](https://ledgerline-tawny-nu.vercel.app/design-process.html).
 
 ## Beyond finance
 
@@ -120,7 +120,7 @@ sidebar starts again.
 ## How I worked
 
 Research and design first: sources, personas, an empathy map, journeys worked through on
-paper, then the key decisions; the [deck](docs/design-process.html) follows the double
+paper, then the key decisions; the [deck](https://ledgerline-tawny-nu.vercel.app/design-process.html) follows the double
 diamond. I built with Claude Code as a pair: I set the direction, made the product
 decisions and reviewed; AI wrote much of the code to that plan. Midway I asked it to
 review its own code for defects. It found 30, and the fixes are the last build commit.
