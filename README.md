@@ -4,7 +4,7 @@
 platform, designed and built end to end: research, design, and a working Next.js app with
 a tested domain model.
 
-**[Live demo](#)** · **[Design process deck](docs/design-process.html)** · **[Code walkthrough](docs/WALKTHROUGH.md)**
+**[Live demo](https://ledgerline-tawny-nu.vercel.app)** · **[Design process deck](docs/design-process.html)** · **[Code walkthrough](docs/WALKTHROUGH.md)**
 
 ![The payments queue: invoices tab with states, amounts and the main action on every row](docs/images/app-01-invoices.jpg)
 
