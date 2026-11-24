@@ -68,3 +68,8 @@
     }
   }
 }
+
+/* Keep room for the scrollbar, so filtering a list short or long never shifts the page sideways. */
+html {
+  scrollbar-gutter: stable;
+}
