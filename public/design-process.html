@@ -28,7 +28,9 @@
     line-height: 1.4;
     -webkit-font-smoothing: antialiased;
   }
-  #stage { position: absolute; left: 50%; top: 50%; width: 1440px; height: 810px; background: #fff; overflow: hidden; }
+  html { overflow: hidden; }
+  /* Fixed, so the 1440px stage never widens the page on a phone before it is scaled down. */
+  #stage { position: fixed; left: 50%; top: 50%; width: 1440px; height: 810px; background: #fff; overflow: hidden; }
   .slide { position: absolute; inset: 0; padding: 48px 64px 62px; display: none; flex-direction: column; }
   .slide.active { display: flex; }
 
@@ -985,7 +987,7 @@ const go = (i) => {
   at = Math.max(0, Math.min(slides.length - 1, i));
   slides.forEach((s, n) => s.classList.toggle("active", n === at));
   document.getElementById("count").textContent = String(at + 1).padStart(2, "0") + " / " + slides.length;
-  document.getElementById("where").textContent = at === 0 ? "" : "Design process · " + slides[at].dataset.section;
+  document.getElementById("where").textContent = at === 0 ? "Scroll, swipe or use the arrow keys" : "Design process · " + slides[at].dataset.section;
   document.getElementById("progress").style.width = ((at + 1) / slides.length) * 100 + "%";
   if (location.hash !== "#" + (at + 1)) history.replaceState(null, "", "#" + (at + 1));
 };
@@ -997,6 +999,25 @@ addEventListener("keydown", (e) => {
   else if (e.key === "Home") go(0);
   else if (e.key === "End") go(slides.length - 1);
 });
+// A trackpad or mouse wheel moves one slide per gesture: the deltas of one
+// swipe are added up, and the next gesture is ignored until this one settles.
+let wheelSum = 0, wheelLock = false, wheelTimer;
+addEventListener("wheel", (e) => {
+  e.preventDefault();
+  clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(() => { wheelSum = 0; wheelLock = false; }, 220);
+  if (wheelLock) return;
+  wheelSum += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  if (Math.abs(wheelSum) > 40) { go(at + (wheelSum > 0 ? 1 : -1)); wheelLock = true; wheelSum = 0; }
+}, { passive: false });
+// Swipe left or up for the next slide on touch screens.
+let touchX = 0, touchY = 0;
+addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
+  const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+  if (Math.abs(d) > 40) go(at + (d < 0 ? 1 : -1));
+}, { passive: true });
 addEventListener("resize", fit);
 addEventListener("hashchange", () => go((parseInt(location.hash.slice(1), 10) || 1) - 1));
 fit();
